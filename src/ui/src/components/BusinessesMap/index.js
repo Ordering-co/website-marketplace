@@ -1,0 +1,55 @@
+import React from 'react'
+import { WrapperMap } from './styles'
+
+import { BusinessesMap as BusinessesMapController } from '~components/components/BusinessesMap'
+import { GoogleMaps as GoogleMapsMap } from '~components/components/GoogleMaps'
+import { useConfig } from '~components/contexts/ConfigContext'
+import { useOrder } from '~components/contexts/OrderContext'
+
+const BusinessesMapUI = (props) => {
+  const {
+    userLocation,
+    businessLocations,
+    onBusinessClick,
+    setErrors
+  } = props
+
+  const [configState] = useConfig()
+  const [orderState] = useOrder()
+
+  const googleMapsControls = {
+    defaultZoom: 15,
+    zoomControl: true,
+    streetViewControl: false,
+    fullscreenControl: false,
+    mapTypeId: 'roadmap', // 'roadmap', 'satellite', 'hybrid', 'terrain'
+    mapTypeControl: false,
+    mapTypeControlOptions: {
+      mapTypeIds: ['roadmap', 'satellite']
+    },
+    isMarkerDraggable: true
+  }
+
+  return (
+    <WrapperMap disabled={orderState.loading}>
+      <GoogleMapsMap
+        apiKey={configState?.configs?.google_maps_api_key?.value}
+        location={userLocation}
+        locations={businessLocations}
+        mapControls={googleMapsControls}
+        maxLimitLocation={parseInt(configState?.configs?.meters_to_change_address?.value)}
+        businessMap
+        onBusinessClick={onBusinessClick}
+        setErrors={setErrors}
+      />
+    </WrapperMap>
+  )
+}
+
+export const BusinessesMap = (props) => {
+  const businessMapController = {
+    ...props,
+    UIComponent: BusinessesMapUI
+  }
+  return <BusinessesMapController {...businessMapController} />
+}

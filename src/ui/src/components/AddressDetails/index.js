@@ -1,0 +1,116 @@
+import React, { useState, useEffect } from 'react'
+import {
+  AddressContainer,
+  Header,
+  Map,
+  Text,
+  ToggleMap,
+  WrappMap
+} from './styles'
+
+import { Icon } from '~ui-icon'
+
+import { AddressDetails as AddressDetailsController } from '~components/components/AddressDetails'
+import { useOrder } from '~components/contexts/OrderContext'
+import { useLanguage } from '~components/contexts/LanguageContext'
+import { useCustomer } from '~components/contexts/CustomerContext'
+import { useConfig } from '~components/contexts/ConfigContext'
+import { Modal } from '~ui/src/components/Modal'
+import { Alert } from '~ui/src/components/Confirm'
+import { AddressList } from '~ui/src/components/AddressList'
+
+const AddressDetailsUI = (props) => {
+  const {
+    addressToShow,
+    isCartPending,
+    googleMapsUrl,
+    isCustomerMode,
+    apiKey,
+    isFromCheckout
+  } = props
+
+  const [orderState] = useOrder()
+  const [, t] = useLanguage()
+  const [{ configs }] = useConfig()
+  const [openModal, setOpenModal] = useState(false)
+  const [alertState, setAlertState] = useState({ open: false, content: [] })
+  const [isShowMap, setIsShowMap] = useState(false)
+  const userCustomer = JSON.parse(window.localStorage.getItem('user-customer'))
+  const [{ user }] = useCustomer()
+  const useAlternativeMap = configs?.use_alternative_to_google_maps?.value === '1'
+  const hideMap = false
+
+  useEffect(() => {
+    return () => setOpenModal(false)
+  }, [])
+
+  return (
+    <AddressContainer>
+      <h1>
+        {orderState?.options?.type === 1 ? t('DELIVERY_ADDRESS', 'Delivery Address') : t('ADDRESS', 'Address')}
+      </h1>
+      <Header>
+        <Text>
+          <h1>{addressToShow || orderState?.options?.address?.address}</h1>
+          {orderState?.options?.type === 1 && !isCartPending && <Icon name="pencil" onClick={() => setOpenModal(true)} />}
+        </Text>
+      </Header>
+      {!hideMap && !useAlternativeMap && apiKey && (
+        <>
+          {!isShowMap && (
+            <ToggleMap>
+              <Text green>
+                <span onClick={() => setIsShowMap(!isShowMap)}>{t('SHOW_MAP', 'Show map')}</span>
+              </Text>
+            </ToggleMap>
+          )}
+          {isShowMap && (
+            <WrappMap>
+              <Map>
+                <img src={googleMapsUrl} id='google-maps-image' alt='google-maps-location' width='288px' height='162px' loading='lazy' />
+              </Map>
+            </WrappMap>
+          )}
+        </>
+      )}
+      {openModal && (
+        <Modal
+          open={openModal}
+          width='70%'
+          onClose={() => setOpenModal(false)}
+        >
+          <AddressList
+            title={t('DELIVERY_ADDRESS', 'Delivery Address')}
+            isModal
+            changeOrderAddressWithDefault
+            userId={isNaN(userCustomer?.id) ? null : userCustomer?.id}
+            onCancel={() => setOpenModal(false)}
+            userCustomerSetup={isCustomerMode && user}
+            isFromCheckout={isFromCheckout}
+            isCustomerMode={isCustomerMode}
+          />
+        </Modal>
+      )}
+
+      <Alert
+        title={t('SEARCH', 'Search')}
+        content={alertState.content}
+        acceptText={t('ACCEPT', 'Accept')}
+        open={alertState.open}
+        onClose={() => setAlertState({ open: false, content: [] })}
+        onAccept={() => setAlertState({ open: false, content: [] })}
+        closeOnBackdrop={false}
+      />
+    </AddressContainer>
+  )
+}
+
+export const AddressDetails = (props) => {
+  const addressDetailsProps = {
+    ...props,
+    UIComponent: AddressDetailsUI
+  }
+  return (
+    <AddressDetailsController {...addressDetailsProps} />
+  )
+}

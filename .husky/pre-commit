@@ -1,0 +1,2 @@
+npm run lint
+node i18n/precommit-generate.cjs

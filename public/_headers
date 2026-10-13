@@ -1,0 +1,17 @@
+/assets/*
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, HEAD, OPTIONS
+  Access-Control-Allow-Headers: *
+  Timing-Allow-Origin: *
+
+/*.woff2
+  Access-Control-Allow-Origin: *
+  Timing-Allow-Origin: *
+
+/*.woff
+  Access-Control-Allow-Origin: *
+  Timing-Allow-Origin: *
+
+/*.ttf
+  Access-Control-Allow-Origin: *
+  Timing-Allow-Origin: *

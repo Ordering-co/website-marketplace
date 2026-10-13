@@ -1,0 +1,150 @@
+import React, { useEffect, useState, useRef } from 'react'
+import { useForm, Controller } from 'react-hook-form'
+
+import {
+  Container,
+  FormContainer,
+  FormController,
+  GiftCardInfoContainer
+} from './styles'
+
+import { useLanguage } from '~components/contexts/LanguageContext'
+import { useUtils } from '~components/contexts/UtilsContext'
+import { RedeemGiftCard as RedeemGiftCardController } from '~components/components/GiftCard/RedeemGiftCard'
+import { Alert } from '~ui/src/components/Confirm'
+import { Button } from '~ui/src/styles/Buttons'
+import { Input } from '~ui/src/styles/Inputs'
+
+const RedeemGiftCardUI = (props) => {
+  const {
+    actionState,
+    redeemedGiftCard,
+    handleApply,
+    onClose,
+    hideTopPlaceholders
+  } = props
+
+  const [, t] = useLanguage()
+  const [{ parsePrice }] = useUtils()
+  const { control, register, handleSubmit, errors } = useForm()
+  const [alertState, setAlertState] = useState({ open: false, content: [] })
+  const codeRef = useRef(null)
+
+  const onSubmit = (values) => {
+    handleApply(values)
+  }
+
+  const handleChangeCode = (event) => {
+    let string = event.target.value
+    string = string.replace(/-/g, '')
+    if (!string) return
+    const codeSlices = string.match(/.{1,4}/g)
+    string = codeSlices.join('-').toUpperCase()
+    codeRef.current.value = string
+  }
+
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      setAlertState({
+        open: true,
+        content: Object.values(errors).map(error => error.message)
+      })
+    }
+  }, [errors])
+
+  useEffect(() => {
+    if (!actionState.error) return
+    setAlertState({
+      open: true,
+      content: actionState.error
+    })
+  }, [actionState.error])
+
+  return (
+    <Container>
+      {!redeemedGiftCard
+        ? (
+        <FormContainer onSubmit={handleSubmit(onSubmit)}>
+          <h2>{t('REDEEM_GIFT_CARD', 'Redeem a gift card')}</h2>
+          <FormController>
+            {!hideTopPlaceholders && <label>{t('GIFT_CARD_CODE', 'Gift card code')}</label>}
+            <Controller
+              name='code'
+              control={control}
+              defaultValue={codeRef.current ?? ''}
+              render={({ onChange, value }) => (
+                <Input
+                  placeholder={t('GIFT_CARD_CODE_PLACEHOLDER', 'Gift card code')}
+                  type='text'
+                  autoComplete='off'
+                  ref={codeRef}
+                  onChange={e => {
+                    onChange((e.target.value).toUpperCase())
+                    handleChangeCode(e)
+                  }}
+                />
+              )}
+              rules={{
+                required: t('VALIDATION_ERROR_REQUIRED', 'Code is required').replace('_attribute_', t('CODE', 'Code'))
+              }}
+            />
+          </FormController>
+          <FormController>
+            {!hideTopPlaceholders && <label>{t('GIFT_CARD_PASSWORD', 'Gift card password')}</label>}
+            <Input
+              placeholder={t('GIFT_CARD_PASSWORD_PLACEHOLDER', 'Gift card password')}
+              name='password'
+              type='password'
+              ref={register({
+                required: t('VALIDATION_ERROR_REQUIRED', 'Password is required').replace('_attribute_', t('PASSWORD', 'Password'))
+              })}
+              autoComplete='new-password'
+            />
+          </FormController>
+          <Button
+            type='submit'
+            color='primary'
+            disabled={actionState.loading}
+          >
+            {actionState?.loading ? t('LOADING', 'Loading') : t('APPLY_TO_YOUR_BALANCE', 'Apply to your balance')}
+          </Button>
+          <Alert
+            title={t('ERROR', 'Error')}
+            content={alertState.content}
+            acceptText={t('ACCEPT', 'Accept')}
+            open={alertState.open}
+            onClose={() => setAlertState({ open: false, content: [] })}
+            onAccept={() => setAlertState({ open: false, content: [] })}
+            closeOnBackdrop={false}
+          />
+        </FormContainer>
+          )
+        : (
+        <>
+          <h2>{t('GIFT_CARD', 'Gift card')}</h2>
+          <GiftCardInfoContainer>
+            <p>{t('TYPE', 'Type')}: {redeemedGiftCard?.type}</p>
+            <p>{t('AMOUNT', 'Amount')}: {parsePrice(redeemedGiftCard?.amount)}</p>
+            <p>{t('FROM', 'From')}: {redeemedGiftCard?.receiver?.name} {redeemedGiftCard?.receiver?.lastname}</p>
+            {redeemedGiftCard?.title && <p>{t('TITLE', 'Title')}: {redeemedGiftCard?.title}</p>}
+            {redeemedGiftCard?.message && <p>{t('MESSAGES', 'Messages')}: {redeemedGiftCard?.message}</p>}
+            <Button
+              color='primary'
+              onClick={() => onClose()}
+            >
+              {t('OK', 'Ok')}
+            </Button>
+          </GiftCardInfoContainer>
+        </>
+          )}
+    </Container>
+  )
+}
+
+export const RedeemGiftCard = (props) => {
+  const redeemGiftCardProps = {
+    ...props,
+    UIComponent: RedeemGiftCardUI
+  }
+  return <RedeemGiftCardController {...redeemGiftCardProps} />
+}
