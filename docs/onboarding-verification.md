@@ -118,3 +118,7 @@ Cobertura dentro del alcance configurado: statements83.01%, branches67.52%, func
 Comparación byte a byte con origin/main actual: `src/config.json`, `pnpm-lock.yaml`, ambas licencias y `.gitmodules` coinciden. El nuevo gitlinkSDK es la actualización intencional upstream, no una edición del subagente. `dist/config.json` coincide exactamente con la configuración pública base; no incorpora config.local.json.
 
 La revisión UI/HMR del clon limpio anterior está documentada arriba. El coordinador actualizará ese clon al merge final y realizará su comprobación de navegador posterior; este resultado de pruebas/build no sustituye esa verificación visual. Sin checkout, login, pedidos/pagos ni escrituras de datos remotos.
+
+### Published merged source in the anonymous clone
+
+The anonymous clone was fast-forwarded to `4bc84971ffdba07fbe8c2c0ef9369f5a3db3aa93`, keeping its ignored custom configuration. Frozen install, the fixed SDK `e1222c32`, public doctor and HTTP 200 passed. The principal observed `orderingv1` and Fast Bite in the browser on the private preview; a temporary banner changed through HMR without manual reload. Exact original bytes were restored and the clone's tracked tree is clean. Screenshots: `onboarding-evidence/marketplace-merged-clone.png` and `marketplace-merged-hmr.png`. This additional evidence changes only documentation and images after the source SHA tested above.
