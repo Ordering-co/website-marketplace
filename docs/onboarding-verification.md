@@ -63,3 +63,13 @@ La corrección examina ambos identificadores presentes y rechaza un token si cua
 Después: `corepack pnpm test src/utils/localMarketplaceSession.test.js` exit 0, 6/6. Cubre marcador desactualizado y caso inverso, marcadores compatibles, consumidor anónimo y sesión desconocida/foránea. Las pruebas comparan todo el almacenamiento en los rechazos. `corepack pnpm lint:check`, `corepack pnpm build` y `git diff --check` pasan. Se corrigió un espacio doble detectado por el primer lint y se repitió exitosamente.
 
 Logs actuales: `/tmp/sergio-139-session-before.log`, `/tmp/sergio-139-session-after.log`, `/tmp/sergio-139-session-lint-check.log`, `/tmp/sergio-139-session-build.log`. La cobertura completa anterior describe el hito previo; no se recalculó para esta corrección focalizada. No se probaron tokens reales ni se borró almacenamiento de personas.
+
+## Corrección de cachés de consumidor sin token — 2026-10-14
+
+El SDK fijado hidrata `user-customer` en CustomerContext (línea 13) y OrderContext (línea 113), `options`/dirección en OrderContext (líneas 200–224), `user` y `device_code` en SessionContext (líneas 52–53) y `school_selected_students` en useSelectedStudent (líneas 3/11). Esa identidad/dirección también pertenece a un tenant aunque no exista token. No se editó el SDK.
+
+Prueba previa con datos sintéticos: los 10 casos foreign/unknown para esas cinco claves eran aceptados indebidamente (10 fallos, 12 pruebas aprobadas). El guard ahora considera las claves leídas reales junto con token: si alguna existe y cualquiera de los dos marcadores contradice el tenant fijado, o ambos faltan, rechaza antes de escribir.
+
+Después de la corrección: `corepack pnpm test src/utils/localMarketplaceSession.test.js` exit 0, **22/22**. Incluye foreign/unknown por cada clave real, mismos cachés del tenant seleccionado, conflictos de marcadores, sesión limpia y preferencias globales. Los rechazos comparan todas las entradas y preservan valores crudos, tokens, cachés y un carrito fixture. Una sesión anónima sin caché SDK puede fijarse; no se borran idioma, moneda, país ni carritos.
+
+`corepack pnpm lint:check`, `corepack pnpm build` y `git diff --check` pasan en esta corrección. Logs: `/tmp/sergio-139-cache-before.log`, `/tmp/sergio-139-cache-after.log`, `/tmp/sergio-139-cache-lint-check.log`, `/tmp/sergio-139-cache-build.log`. Las cifras completas de coverage anteriores corresponden al hito anterior. La verificación de caché utiliza fixtures aislados, no tokens, direcciones ni usuarios reales; no hubo escrituras live.
