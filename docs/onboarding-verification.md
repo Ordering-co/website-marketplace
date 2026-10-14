@@ -73,3 +73,23 @@ Prueba previa con datos sintéticos: los 10 casos foreign/unknown para esas cinc
 Después de la corrección: `corepack pnpm test src/utils/localMarketplaceSession.test.js` exit 0, **22/22**. Incluye foreign/unknown por cada clave real, mismos cachés del tenant seleccionado, conflictos de marcadores, sesión limpia y preferencias globales. Los rechazos comparan todas las entradas y preservan valores crudos, tokens, cachés y un carrito fixture. Una sesión anónima sin caché SDK puede fijarse; no se borran idioma, moneda, país ni carritos.
 
 `corepack pnpm lint:check`, `corepack pnpm build` y `git diff --check` pasan en esta corrección. Logs: `/tmp/sergio-139-cache-before.log`, `/tmp/sergio-139-cache-after.log`, `/tmp/sergio-139-cache-lint-check.log`, `/tmp/sergio-139-cache-build.log`. Las cifras completas de coverage anteriores corresponden al hito anterior. La verificación de caché utiliza fixtures aislados, no tokens, direcciones ni usuarios reales; no hubo escrituras live.
+
+## Arranque desde clon público limpio — 2026-10-14
+
+Fuente de esta comprobación: `/private/tmp/sergio-137-clean/website-marketplace`, HEAD `176610129136080d9a395b6bd651c7d8a93cc82c`, árbol tracked limpio. La sesión principal preparó el clone/submódulo, instalación frozen con Node24/pnpm9.15 y la repetición de configuración conservando personalizaciones; esta corrida relee esa configuración y comprueba el arranque desde el clon.
+
+Comprobaciones propias: `corepack pnpm --version` devuelve `9.15.0`; `corepack pnpm marketplace:doctor` exit0 confirma Node24, componentes, lockfile, proyecto orderingv1 y catálogo público (1 comercio en consulta mínima). Lectura pública local confirma app_name `Onboarding preservation check`, customer_custom_setting `{theme: preserve-me}` y pin verdadero.
+
+Puerto3005 verificado libre antes de arrancar. Tailscale actual: Running, IP privada `100.92.126.87`. Se usa `corepack pnpm exec vite --host 100.92.126.87 --port 3005 --strictPort`, el comando Vite fijado que usa el launcher, con puerto explícito para esta coordinación: marketplace:start no ofrece parámetro port y habría elegido el siguiente disponible. Sin modificar el clon ni el launcher.
+
+Preview: `http://100.92.126.87:3005/`; curl devuelve **HTTP200**. CWD y HEAD corresponden al clon limpio anterior. Proceso supervisor16915, listenerVite16916; pidfile `/tmp/sergio-139-clean-preview.pid`, log `/tmp/sergio-139-clean-preview.log`, respuesta HTTP `/tmp/sergio-139-clean-preview.html`. Servidor previo del puerto3000 conservado. Los procesos quedan activos para la sesión principal.
+
+La laptop figura offline en el estado Tailscale consultado; no se afirma acceso desde ella. HTTP200 prueba entrega, no apariencia: la sesión principal completa la verificación UI desde este clon y sus capturas. No se inició auth/login, pedidos/pagos ni escrituras API; tampoco se modificó Git, checkout, SDK o datos de clientes.
+
+### Verificación visual actual del clon limpio
+
+La sesión principal abrió el clon en `http://100.92.126.87:3005/store/fastbite`: se renderizó Fast Bite, categorías del catálogo y el indicador `orderingv1`. Captura actual: [catálogo del clon limpio](onboarding-evidence/marketplace-clean-clone.png).
+
+Se guardaron los bytes originales del componente local y se cambió temporalmente el texto a `My clean Marketplace edit`. La sesión principal verificó el cambio visible sin reload manual y capturó [HMR del clon limpio](onboarding-evidence/marketplace-clean-hmr.png); el log propio de Vite registra HMR del componente a las 18:18:00. Ambas imágenes fueron inspeccionadas y conservan el indicador orderingv1.
+
+Tras capturar se restauraron exactamente los bytes originales: comparación byte a byte aprobada, `git status --short` del clon vacío y HEAD1766101 intacto. Vite registra la restauración por HMR a las 18:18:33. Las capturas prueban catálogo/primera edición de este clon público actual; no prueban login, compra, pago, nueva selección browser ni acceso desde laptop. El servidor sigue activo para revisión.
