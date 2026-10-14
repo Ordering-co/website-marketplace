@@ -44,3 +44,13 @@ i18n/.env
 
 # translate-keys working batches
 i18n/batches/
+
+# Local Marketplace pairing and reversible configuration
+src/config.local.json
+src/config.local.json.*.tmp
+.marketplace-local/
+scripts/marketplace/connection/.env
+scripts/marketplace/connection/.login/
+scripts/marketplace/connection/.api-audit.log
+scripts/marketplace/connection/.marketplace-project.json
+scripts/marketplace/connection/.marketplace-project.json.*.tmp

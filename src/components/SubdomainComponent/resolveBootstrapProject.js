@@ -18,8 +18,8 @@ export const resolveBootstrapProject = ({
   settings,
   storedProject
 }) => {
+  if (settings?._local_project_pin) return settings.project
   if (isUsableProject(workerProject)) return workerProject
-
   if (settings?.use_project_subdomain && isOrderingHostname(hostname)) {
     const fromHost = projectFromHostname(hostname)
     if (isUsableProject(fromHost)) return fromHost
@@ -35,6 +35,7 @@ export const resolveCurrentLookupProject = ({
   settings,
   storedProject
 }) => {
+  if (settings?._local_project_pin) return settings.project
   if (settings?.use_project_subdomain && isOrderingHostname(hostname)) {
     const fromHost = projectFromHostname(hostname)
     if (isUsableProject(fromHost)) return fromHost

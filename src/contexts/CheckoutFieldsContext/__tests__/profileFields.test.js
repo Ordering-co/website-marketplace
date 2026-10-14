@@ -19,7 +19,7 @@ describe('computeMissingProfileFields', () => {
     expect(computeMissingProfileFields({ user, fields, configs })).toEqual(['name', 'lastname', 'email'])
   })
 
-  it("devuelve si el usuario tiene todo", () => {
+  it('devuelve si el usuario tiene todo', () => {
     const user = { id: 1, name: 'Carlos', lastname: 'Gomez', email: 'c@x.com' }
     const fields = [field('name'), field('lastname'), field('email')]
     expect(computeMissingProfileFields({ user, fields, configs })).toEqual([])
@@ -165,7 +165,7 @@ describe('buildGateCheckoutFields', () => {
     expect(result).toEqual([])
   })
 
-  it("devuelve si el default order type no resuelve", () => {
+  it('devuelve si el default order type no resuelve', () => {
     const fields = [field('name')]
     expect(buildGateCheckoutFields({ fields, configs: {}, missingFields: [] })).toEqual([])
   })

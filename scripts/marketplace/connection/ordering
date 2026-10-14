@@ -1,0 +1,1115 @@
+#!/usr/bin/env bash
+# ordering: a small helper for the Ordering.co developer quickstart.
+#
+#   ./ordering login             Sign in with your browser and get an MCP key (no copy-paste)
+#                                (agents: "login start" then "login wait"; relay its TELL THE
+#                                USER block verbatim; "login code" re-shows the current code)
+#   ./ordering init [SERVER_URL] Create .env, set your project from the Server URL, open the file
+#   ./ordering doctor            Check your project, MCP key and API key
+#   ./ordering install           Register and verify Ordering in detected MCP clients globally
+#   ./ordering prepare           Prepare the locked launcher without global registration
+#   ./ordering clients           Check registered clients
+#   ./ordering mcp               Desktop-safe stdio launcher (used by clients)
+#   ./ordering uninstall         Undo install (your key in .env is left alone)
+#   ./ordering logout            Disconnect here: remove the key from .env, Claude Code and Codex
+#                                (alias: disconnect; the key still works until you revoke it)
+#   ./ordering reset             logout, then sign in again (same flags as login)
+#   ./ordering claude [args]     Start Claude Code with your .env loaded
+#   ./ordering codex [args]      Start Codex with the Ordering MCP configured
+#   ./ordering cursor | code     Open this folder in Cursor or VS Code with your .env loaded
+#   ./ordering api [--yes] METHOD PATH [JSON | @file.json]
+#                                Call the REST API (non-GET requests ask for confirmation,
+#                                or pass --yes once a person approved this exact request)
+#   ./ordering spec              Download the current OpenAPI spec to spec/openapi.json
+#
+# Requirements: bash and curl. jq or python3 for doctor and pretty output.
+
+set -euo pipefail
+umask 077   # every file this script writes (.env, temporary keys) is private
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+API_HOST="${ORDERING_API_HOST:-https://api.ordering.co}"
+case "$API_HOST" in
+  https://api.ordering.co|http://127.0.0.1:*) ;;
+  *) echo "ORDERING_API_HOST must be https://api.ordering.co (or http://127.0.0.1 for tests)" >&2; exit 1 ;;
+esac
+API_VERSION="v400"
+SPEC_URL="https://docs.ordering.co/api-reference/openapi.json"
+DOCS_URL="https://docs.ordering.co/docs/developers/"
+
+# ---------------------------------------------------------------- output
+
+if [ -t 1 ]; then
+  C_OK=$'\033[32m'; C_WARN=$'\033[33m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'
+else
+  C_OK=""; C_WARN=""; C_ERR=""; C_DIM=""; C_B=""; C_0=""
+fi
+ok()    { printf '  %s✔%s %s\n' "$C_OK" "$C_0" "$*"; }
+warn()  { printf '  %s⚠%s %s\n' "$C_WARN" "$C_0" "$*"; }
+fail()  { printf '  %s✘%s %s\n' "$C_ERR" "$C_0" "$*"; }
+hint()  { printf '    %s%s%s\n' "$C_DIM" "$*" "$C_0"; }
+title() { printf '\n%s%s%s\n' "$C_B" "$*" "$C_0"; }
+die()   { printf '%serror:%s %s\n' "$C_ERR" "$C_0" "$*" >&2; exit 1; }
+
+# ---------------------------------------------------------------- .env
+
+# Reads ORDERING_* variables from .env without executing it.
+# Values in .env win over your shell, so a key you just replaced in .env is
+# used right away. Variables missing from .env fall back to your shell.
+ENV_FILE="$ROOT/.env"
+ENV_SOURCES=""
+load_env() {
+  [ -f "$ENV_FILE" ] || return 0
+  local line key value
+  local first=1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    if [ "$first" = 1 ]; then line="${line#$'\xef\xbb\xbf'}"; first=0; fi
+    if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?(ORDERING_[A-Z0-9_]+)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+      key="${BASH_REMATCH[2]}"
+      value="${BASH_REMATCH[3]}"
+      if [[ "$value" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]] || [[ "$value" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
+        value="${BASH_REMATCH[1]}"
+      else
+        # A comment starts at " #". A # inside the value is kept.
+        if [[ "$value" =~ ^(.*[^[:space:]])[[:space:]]+#.*$ ]]; then value="${BASH_REMATCH[1]}"; fi
+        case "$value" in \#*) value="" ;; esac
+        value="${value%"${value##*[![:space:]]}"}"
+      fi
+      if [ -n "$value" ]; then
+        export "$key=$value"
+        ENV_SOURCES="$ENV_SOURCES $key"
+      fi
+    fi
+  done < "$ENV_FILE"
+}
+
+source_of() {
+  case " $ENV_SOURCES " in
+    *" $1 "*) echo ".env" ;;
+    *) echo "shell" ;;
+  esac
+}
+
+# Shows only the type prefix and the last 4 characters.
+mask() {
+  local v="$1" prefix=""
+  case "$v" in ord_mcp_*) prefix="ord_mcp_" ;; esac
+  if [ "${#v}" -le 12 ]; then echo "${prefix}****"; else echo "${prefix}…${v: -4}"; fi
+}
+
+lang()    { echo "${ORDERING_LANG:-en}"; }
+api_base() { echo "$API_HOST/$API_VERSION/$(lang)/${ORDERING_PROJECT}"; }
+mcp_url() { echo "$API_HOST/mcp/${ORDERING_PROJECT}"; }
+
+require_project() {
+  [ -n "${ORDERING_PROJECT:-}" ] || die "ORDERING_PROJECT is empty. Run: cp .env.example .env, fill it in, then ./ordering doctor"
+}
+
+# ---------------------------------------------------------------- JSON helpers
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# json_get <json> <dotted.path>  → prints the value, or nothing
+json_get() {
+  local json="$1" path="$2"
+  if have jq; then
+    printf '%s' "$json" | jq -r --arg p "$path" \
+      'getpath($p | split(".") | map(tonumber? // .)) | if . == null then empty elif type == "object" or type == "array" then tojson else tostring end' \
+      2>/dev/null || true
+  elif have python3; then
+    printf '%s' "$json" | python3 -c '
+import json, sys
+try:
+    v = json.load(sys.stdin)
+    for k in sys.argv[1].split("."):
+        v = v[int(k)] if isinstance(v, list) else v.get(k)
+    if v is not None:
+        print(v if isinstance(v, str) else json.dumps(v))
+except Exception:
+    pass
+' "$path"
+  fi
+}
+
+# days_until <ISO-8601 timestamp>  → whole days from now (can be negative)
+days_until() {
+  if have jq; then
+    jq -rn --arg t "$1" '(($t | sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) - now) / 86400 | floor' 2>/dev/null || true
+  elif have python3; then
+    python3 -c '
+import sys, datetime
+t = datetime.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+print(int((t - datetime.datetime.now(datetime.timezone.utc)).total_seconds() // 86400))
+' "$1" 2>/dev/null || true
+  fi
+}
+
+# pretty <file>: prints JSON nicely, or the raw body if it is not JSON
+pretty() {
+  if have jq && jq . "$1" 2>/dev/null; then return; fi
+  if have python3 && python3 -m json.tool "$1" 2>/dev/null; then return; fi
+  cat "$1"; echo
+}
+
+# Temporary files are removed on exit.
+TMP_DIR="$(mktemp -d)"; chmod 700 "$TMP_DIR"
+trap 'rm -rf "$TMP_DIR"' EXIT
+trap 'exit 130' INT TERM
+tmpfile() { mktemp "$TMP_DIR/f.XXXXXX"; }
+
+# header_file "Name: value" → path of a private file for curl -H @file.
+# Keeps keys out of the process list.
+header_file() { local f; f="$(tmpfile)"; printf '%s\n' "$1" > "$f"; echo "$f"; }
+
+# http curl-args...  → sets HTTP_BODY and HTTP_CODE (000 when unreachable)
+HTTP_BODY=""; HTTP_CODE=""
+http() {
+  local tmp; tmp="$(tmpfile)"
+  HTTP_CODE="$(curl -sS -m 20 -o "$tmp" -w '%{http_code}' "$@" 2>/dev/null)" || HTTP_CODE="000"
+  [ -n "$HTTP_CODE" ] || HTTP_CODE="000"
+  HTTP_BODY="$(cat "$tmp")"
+}
+
+# mcp_whoami <project> <key>  → sets HTTP_CODE and MCP_BODY (the JSON-RPC result, SSE unwrapped)
+MCP_BODY=""
+mcp_whoami() {
+  http -X POST "$API_HOST/mcp/$1" \
+    -H "@$(header_file "Authorization: Bearer $2")" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"whoami","arguments":{}}}'
+  MCP_BODY="$HTTP_BODY"
+  # Streamable HTTP can answer as server-sent events: keep the first data line.
+  case "$MCP_BODY" in *data:*) MCP_BODY="$(printf '%s\n' "$MCP_BODY" | sed -n 's/^data: *//p' | head -1)";; esac
+}
+
+# api_users_me <project> <api key>  → sets HTTP_CODE and API_BODY
+API_BODY=""
+api_users_me() {
+  http -H "@$(header_file "X-Api-Key: $2")" -H "Accept: application/json" \
+    "$API_HOST/$API_VERSION/$(lang)/$1/users/me"
+  API_BODY="$HTTP_BODY"
+}
+
+# ---------------------------------------------------------------- doctor
+
+cmd_doctor() {
+  local problems=0
+
+  title "Project"
+  if [ ! -f "$ENV_FILE" ]; then
+    warn "No .env file. Create it with: cp .env.example .env"
+  fi
+  if [ -z "${ORDERING_PROJECT:-}" ]; then
+    fail "ORDERING_PROJECT is empty"
+    hint "Your project ID is lowercase with no spaces. It is the last part of your MCP Server URL."
+    problems=$((problems + 1))
+  elif [[ ! "$ORDERING_PROJECT" =~ ^[a-z0-9_-]+$ ]]; then
+    fail "ORDERING_PROJECT='$ORDERING_PROJECT' should be lowercase letters, numbers, - or _"
+    problems=$((problems + 1))
+  else
+    http "$(api_base)/configs"
+    if [ "$HTTP_CODE" = "200" ] && [ "$(json_get "$HTTP_BODY" error)" = "false" ]; then
+      ok "Project '$ORDERING_PROJECT' found · language '$(lang)' · from $(source_of ORDERING_PROJECT)"
+    elif [ "$HTTP_CODE" = "000" ]; then
+      fail "Could not reach $API_HOST. Check your internet connection or proxy."
+      problems=$((problems + 1))
+    else
+      fail "Project '$ORDERING_PROJECT' was not accepted (HTTP $HTTP_CODE)"
+      hint "API said: $(json_get "$HTTP_BODY" result | head -c 200)"
+      hint "Check the spelling in .env, and ORDERING_LANG if you changed it."
+      problems=$((problems + 1))
+    fi
+  fi
+
+  title "MCP (AI agents)"
+  if [ -z "${ORDERING_MCP_KEY:-}" ]; then
+    warn "ORDERING_MCP_KEY is empty. Skip this if you only use the REST API."
+    hint "Create one in Dashboard > Settings > Apps & developers > API & integrations > MCP"
+  elif [ -z "${ORDERING_PROJECT:-}" ]; then
+    warn "Set ORDERING_PROJECT first."
+  else
+    case "$ORDERING_MCP_KEY" in
+      ord_mcp_*) ;;
+      *) warn "MCP keys usually start with ord_mcp_. Is this an API key instead? API keys go in ORDERING_API_KEY." ;;
+    esac
+    mcp_whoami "$ORDERING_PROJECT" "$ORDERING_MCP_KEY"
+    local body="$MCP_BODY"
+    if [ "$HTTP_CODE" = "200" ] && [ -n "$(json_get "$body" result.structuredContent.project)" ]; then
+      local sc name role project scope expires days
+      sc="result.structuredContent"
+      name="$(json_get "$body" "$sc.user.name")"
+      role="$(json_get "$body" "$sc.user.role")"
+      project="$(json_get "$body" "$sc.project")"
+      scope="$(json_get "$body" "$sc.token.scope")"
+      expires="$(json_get "$body" "$sc.token.expires_at")"
+      ok "Connected as $name ($role) · key $(mask "$ORDERING_MCP_KEY") from $(source_of ORDERING_MCP_KEY)"
+      if [ "$project" != "$ORDERING_PROJECT" ]; then
+        fail "This key belongs to project '$project', but ORDERING_PROJECT is '$ORDERING_PROJECT'"
+        problems=$((problems + 1))
+      fi
+      if [ "$scope" = "read" ]; then
+        ok "Scope: read"
+      else
+        warn "Scope: $scope. A read key is safer for everyday work; agents can change real data with a write key."
+      fi
+      if [ -n "$expires" ]; then
+        days="$(days_until "$expires")"
+        if [ -z "$days" ]; then
+          ok "Expires: $expires"
+        elif [ "$days" -lt 0 ]; then
+          fail "Key expired on ${expires%%T*}. Get a new one with: ./ordering login"
+          problems=$((problems + 1))
+        elif [ "$days" -le 3 ]; then
+          warn "Key expires in $days day(s), on ${expires%%T*}. Renew it with: ./ordering login"
+        else
+          ok "Expires in $days days (${expires%%T*})"
+        fi
+      fi
+    elif [ "$HTTP_CODE" = "000" ]; then
+      fail "Could not reach $(mcp_url)"
+      problems=$((problems + 1))
+    else
+      local msg
+      msg="$(json_get "$body" error.message)"; [ -n "$msg" ] || msg="$(json_get "$body" result)"
+      fail "MCP rejected the key (HTTP $HTTP_CODE): ${msg:-no details}"
+      case "$msg" in
+        *"Invalid MCP token"*) hint "The key is wrong, expired or revoked. Get a new one with: ./ordering login" ;;
+        *"project does not exist"*) hint "Check ORDERING_PROJECT." ;;
+        *"token is required"*) hint "The key did not reach the server. Check ORDERING_MCP_KEY in .env." ;;
+      esac
+      problems=$((problems + 1))
+    fi
+  fi
+
+  title "REST API (your code)"
+  if [ -z "${ORDERING_API_KEY:-}" ]; then
+    warn "ORDERING_API_KEY is empty. Skip this if you only use the MCP."
+    hint "Create one in Dashboard > Settings > Developers > API Keys > Add API key"
+  elif [ -z "${ORDERING_PROJECT:-}" ]; then
+    warn "Set ORDERING_PROJECT first."
+  else
+    case "$ORDERING_API_KEY" in
+      ord_mcp_*) fail "ORDERING_API_KEY holds an MCP key. MCP keys go in ORDERING_MCP_KEY."; problems=$((problems + 1)) ;;
+      *)
+        http -H "@$(header_file "X-Api-Key: $ORDERING_API_KEY")" "$(api_base)/orders?orderBy=-id&page=1&page_size=1&mode=dashboard"
+        if [ "$HTTP_CODE" = "200" ] && [ "$(json_get "$HTTP_BODY" error)" = "false" ]; then
+          ok "API key $(mask "$ORDERING_API_KEY") accepted (GET /orders) · from $(source_of ORDERING_API_KEY)"
+        else
+          fail "API key was rejected for GET /orders (HTTP $HTTP_CODE): $(json_get "$HTTP_BODY" result | head -c 200)"
+          hint "Check the key in Dashboard > Settings > Developers > API Keys, and that it belongs to '$ORDERING_PROJECT'."
+          problems=$((problems + 1))
+        fi
+        ;;
+    esac
+    warn "There is no sandbox: POST, PUT, PATCH and DELETE change production data."
+  fi
+
+  if [ -z "${ORDERING_MCP_KEY:-}" ] && [ -z "${ORDERING_API_KEY:-}" ]; then
+    echo
+    fail "No keys yet. Add ORDERING_MCP_KEY, ORDERING_API_KEY or both to .env."
+    problems=$((problems + 1))
+  fi
+
+  title "Tools"
+  local found=""
+  for t in claude codex opencode cursor code; do have "$t" && found="$found $t"; done
+  if [ -n "$found" ]; then ok "Found:$found"; else warn "No agent or editor CLI found (claude, codex, opencode, cursor, code)"; fi
+  have jq || have python3 || warn "Install jq or python3 for full doctor output"
+
+  echo
+  if [ "$problems" -eq 0 ]; then
+    printf '%sConnection verified.%s Client registration: ./ordering clients   (install or repair: ./ordering install)\n' "$C_OK" "$C_0"
+  else
+    printf '%s%d problem(s) found.%s See docs/troubleshooting.md\n' "$C_ERR" "$problems" "$C_0"
+    exit 1
+  fi
+}
+
+# ---------------------------------------------------------------- launchers
+
+# Agents get the MCP key, not the REST API key. Inside the agent, ./ordering api
+# still reads the API key from .env, so its write confirmation keeps working.
+cmd_claude() {
+  have claude || die "Claude Code is not installed. See https://code.claude.com/docs"
+  require_project
+  cd "$ROOT"
+  unset ORDERING_API_KEY
+  exec claude "$@"
+}
+
+cmd_codex() {
+  have codex || die "Codex is not installed. See https://developers.openai.com/codex"
+  require_project
+  cd "$ROOT"
+  unset ORDERING_API_KEY
+  exec codex \
+    -c "mcp_servers.ordering.url=\"$(mcp_url)\"" \
+    -c 'mcp_servers.ordering.bearer_token_env_var="ORDERING_MCP_KEY"' \
+    "$@"
+}
+
+cmd_editor() {
+  local bin="$1"; shift
+  have "$bin" || die "'$bin' command not found. In the editor, run the command palette action that installs the '$bin' shell command."
+  exec "$bin" "$ROOT" "$@"
+}
+
+# ---------------------------------------------------------------- init
+
+# set_env_line KEY VALUE: replaces KEY=... in .env, or appends it.
+# The value travels through awk's environment (ENVIRON), never as a -v argument,
+# so a key being written to .env never shows up in this process's argv.
+set_env_line() {
+  local key="$1" value="$2" tmp
+  tmp="$(tmpfile)"
+  SET_ENV_LINE_VALUE="$value" awk -v k="$key" '
+    BEGIN { v = ENVIRON["SET_ENV_LINE_VALUE"]; done = 0 }
+    $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "[[:space:]]*=" { print k "=" v; done = 1; next }
+    { print }
+    END { if (!done) print k "=" v }
+  ' "$ENV_FILE" > "$tmp"
+  cat "$tmp" > "$ENV_FILE"
+}
+
+cmd_init() {
+  local input="${1:-}" project
+  if [ ! -f "$ENV_FILE" ]; then
+    cp "$ROOT/env.example" "$ENV_FILE"
+    ok "Created .env"
+  fi
+  chmod 600 "$ENV_FILE"
+
+  if [ -n "$input" ]; then
+    case "$input" in
+      *ord_mcp_*) die "That is an MCP key, not the Server URL. It has been exposed: delete it in the Dashboard and create a new one." ;;
+    esac
+    input="$(printf '%s' "$input" | tr -d '[:space:]')"
+    input="${input%/}"
+    case "$input" in
+      */mcp/*) project="${input##*/mcp/}" ;;
+      *) project="$input" ;;
+    esac
+    project="${project%%[/?#]*}"
+    [[ "$project" =~ ^[a-z0-9_-]+$ ]] || die "Could not read a project ID from '$input'. Paste the Server URL, like https://api.ordering.co/mcp/yourproject"
+    set_env_line ORDERING_PROJECT "$project"
+    ok "Project set to '$project'"
+  fi
+
+  ok "Your keys go in: $ENV_FILE"
+  if [ "$(uname)" = "Darwin" ] && [ -z "${SSH_CONNECTION:-}" ] && open -t "$ENV_FILE" 2>/dev/null; then
+    ok "Opened it in your text editor"
+  elif have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && xdg-open "$ENV_FILE" >/dev/null 2>&1; then
+    ok "Opened it in your text editor"
+  else
+    hint "Open it with: nano \"$ENV_FILE\""
+  fi
+  hint "Paste your MCP key right after ORDERING_MCP_KEY= (no spaces, no quotes) and save."
+}
+
+# ---------------------------------------------------------------- login
+#
+# Browser sign-in through docs.ordering.co (protocol: docs/login-protocol.md).
+# The terminal creates an RSA key pair; the page encrypts the new MCP key to it;
+# a relay on docs.ordering.co holds only the ciphertext until this script claims it.
+
+CONNECT_URL="${ORDERING_CONNECT_URL:-https://docs.ordering.co}"
+LOGIN_DIR="$ROOT/.login"
+LOGIN_TTL=600
+
+connect_base() {
+  case "$CONNECT_URL" in
+    https://*|http://127.0.0.1:*|http://localhost:*) echo "${CONNECT_URL%/}" ;;
+    *) die "ORDERING_CONNECT_URL must be https:// (or http://127.0.0.1 for tests)" ;;
+  esac
+}
+
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+b64url_decode() {
+  local s; s="$(tr '_-' '/+')"
+  case $(( ${#s} % 4 )) in 2) s="$s==" ;; 3) s="$s=" ;; esac
+  printf '%s' "$s" | openssl base64 -d -A
+}
+sha256_hex() { openssl dgst -sha256 | awk '{print $NF}'; }
+
+login_client() {
+  case "${1:-}" in
+    claude|claude-code) echo "Claude Code" ;;
+    codex) echo "Codex" ;;
+    "") if [ -n "${CLAUDECODE:-}" ]; then echo "Claude Code"; else echo "Terminal"; fi ;;
+    *) die "Unknown --client '$1'. Use claude, codex or leave it out." ;;
+  esac
+}
+
+# True when the developer most likely can't see this command's own stdout directly:
+# an AI agent session (its tool output is collapsed in the UI), or no terminal at all.
+# In that case `login start` must not open the browser, and must print something the
+# agent can relay verbatim instead of assuming the developer already saw it.
+is_agent_session() {
+  if [ -n "${CLAUDECODE:-}" ]; then return 0; fi
+  if env | grep -q '^CODEX_'; then return 0; fi
+  if [ ! -t 1 ]; then return 0; fi
+  return 1
+}
+
+# Prints a block meant to be copied verbatim into the agent's reply to the developer:
+# the link and the code, with nothing else needed to sign in.
+print_tell_the_user_block() {
+  local url="$1" code="$2"
+  echo
+  printf '===== TELL THE USER (copy this into your reply) =====\n'
+  printf 'Open this link and sign in to Ordering.co: %s\n' "$url"
+  printf 'When the page asks, type this code: %s\n' "$code"
+  printf '=====================================================\n'
+  echo
+  printf '  %sThe link works for 10 minutes. Never share the link or the code.%s\n\n' "$C_DIM" "$C_0"
+}
+
+cmd_login_start() {
+  local client="$1"
+  if [ "${PROJECT_ONLY_LOGIN:-0}" = 1 ]; then
+    local page
+    page="$(curl -fsS --max-time 20 "$(connect_base)/connect/connect.js")" || die "Project selection service unavailable. Keep existing connections; retry later."
+    [[ "$page" == *marketplace-project-selection-v1* ]] || die "Project-only browser selection is not published yet. Reuse an existing connected project; no new key was requested."
+  fi
+  have openssl || die "openssl is required for ./ordering login. Use ./ordering init instead."
+  local base; base="$(connect_base)"
+  rm -rf "$LOGIN_DIR"; mkdir -p "$LOGIN_DIR"; chmod 700 "$LOGIN_DIR"
+
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$LOGIN_DIR/private.pem" 2>/dev/null \
+    || die "Could not create a key pair with openssl."
+  chmod 600 "$LOGIN_DIR/private.pem"
+  openssl pkey -in "$LOGIN_DIR/private.pem" -pubout -outform DER -out "$LOGIN_DIR/public.der" 2>/dev/null
+
+  local id secret deliver_token claim_hash deliver_hash public_key code host
+  id="$(openssl rand -hex 16)"
+  secret="$(openssl rand -hex 32)"
+  deliver_token="$(openssl rand -hex 16)"
+  claim_hash="$(printf '%s' "$secret" | sha256_hex)"
+  deliver_hash="$(printf '%s' "$deliver_token" | sha256_hex)"
+  public_key="$(b64url < "$LOGIN_DIR/public.der")"
+  code="$(sha256_hex < "$LOGIN_DIR/public.der" | cut -c1-12 | tr '[:lower:]' '[:upper:]')"
+  code="${code:0:4}-${code:4:4}-${code:8:4}"
+  host="$( (hostname -s 2>/dev/null || hostname) | tr -cd 'A-Za-z0-9.-' | cut -c1-64)"
+  [ -n "$host" ] || host="computer"
+
+  local body
+  body="$(printf '{"id":"%s","claim_hash":"%s","deliver_hash":"%s","public_key":"%s","client":"%s","host":"%s"}' \
+    "$id" "$claim_hash" "$deliver_hash" "$public_key" "$client" "$host")"
+  http -X POST "$base/connect/api/pairings" -H "Content-Type: application/json" --data-binary "$body"
+  [ "$HTTP_CODE" = "201" ] || die "Could not start the sign-in (HTTP $HTTP_CODE). Try again, or use ./ordering init."
+
+  printf '%s\n' "$id" > "$LOGIN_DIR/id"
+  printf '%s\n' "$secret" > "$LOGIN_DIR/secret"
+  printf '%s\n' "$code" > "$LOGIN_DIR/code"
+  printf '%s\n' "$(( $(date +%s) + LOGIN_TTL ))" > "$LOGIN_DIR/expires"
+  chmod 600 "$LOGIN_DIR"/*
+
+  local url="$base/connect/?product=website-marketplace#$id.$deliver_token"
+  if [ "${PROJECT_ONLY_LOGIN:-0}" = 1 ]; then
+    printf 'project\n' > "$LOGIN_DIR/purpose"
+    url="$base/connect/?product=website-marketplace&purpose=project#$id.$deliver_token"
+  fi
+  if is_agent_session; then
+    # The developer can't see this output directly: don't open a browser they
+    # didn't ask for, and give the agent a block it can relay verbatim.
+    print_tell_the_user_block "$url" "$code"
+    return 0
+  fi
+  echo
+  printf '  When the page asks, type this code: %s%s%s\n\n' "$C_B" "$code" "$C_0"
+  printf '  %sOpen this link and sign in to Ordering.co:%s\n' "$C_B" "$C_0"
+  printf '  %s\n\n' "$url"
+  printf '  %sThe link works for 10 minutes. Never share the link or the code.%s\n\n' "$C_DIM" "$C_0"
+  if [ -z "${ORDERING_NO_BROWSER:-}" ] && [ -z "${SSH_CONNECTION:-}" ]; then
+    if [ "$(uname)" = "Darwin" ]; then open "$url" 2>/dev/null || true
+    elif have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then xdg-open "$url" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
+cmd_login_wait() {
+  local timeout="${1:-540}"
+  local project_only=0
+  [ ! -f "$LOGIN_DIR/purpose" ] || project_only=1
+  local install_after_login=0
+  [ ! -f "$LOGIN_DIR/install" ] || install_after_login=1
+  [ -f "$LOGIN_DIR/id" ] || die "No sign-in in progress. Run ./ordering login first."
+  local old_project="${ORDERING_PROJECT:-}" old_api_key="${ORDERING_API_KEY:-}"
+  local base id secret expires deadline now
+  base="$(connect_base)"
+  id="$(cat "$LOGIN_DIR/id")"; secret="$(cat "$LOGIN_DIR/secret")"; expires="$(cat "$LOGIN_DIR/expires")"
+  now="$(date +%s)"
+  deadline=$(( now + timeout )); [ "$deadline" -le "$expires" ] || deadline="$expires"
+  [ "$now" -lt "$expires" ] || { rm -rf "$LOGIN_DIR"; die "The sign-in link expired. Run ./ordering login again."; }
+
+  local body_file ciphertext=""
+  body_file="$(tmpfile)"
+  printf '{"claim_secret":"%s"}' "$secret" > "$body_file"
+  printf '  Code: %s%s%s\n' "$C_B" "$(cat "$LOGIN_DIR/code")" "$C_0"
+  printf '  Waiting for you to finish in the browser'
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    http -X POST "$base/connect/api/pairings/$id/claim" -H "Content-Type: application/json" --data-binary "@$body_file"
+    case "$HTTP_CODE" in
+      200) ciphertext="$(json_get "$HTTP_BODY" ciphertext)"; break ;;
+      202|000) printf '.'; sleep 2 ;;
+      404) echo; rm -rf "$LOGIN_DIR"; die "The sign-in expired or was cancelled. Run ./ordering login again." ;;
+      *) echo; rm -rf "$LOGIN_DIR"; die "The sign-in failed (HTTP $HTTP_CODE). Run ./ordering login again." ;;
+    esac
+  done
+  echo
+  if [ -z "$ciphertext" ]; then
+    if [ "$(date +%s)" -ge "$expires" ]; then rm -rf "$LOGIN_DIR"; die "The sign-in link expired. Run ./ordering login again."; fi
+    die "Still waiting. Finish in the browser, then run: ./ordering login wait"
+  fi
+
+  # The ciphertext is one 256-byte RSA-OAEP block (MCP key only, v2.1) or two
+  # (MCP key + optional REST API key, v2.2). Each block is decrypted on its own:
+  # openssl pkeyutl only ever decrypts exactly one RSA block at a time.
+  local ct_file ct_len block_file payload payload2=""
+  local version pid project key key_name
+  local api_version pid2 api_key="" api_key_id="" api_hint=""
+  ct_file="$(tmpfile)"
+  printf '%s' "$ciphertext" | b64url_decode > "$ct_file" 2>/dev/null
+  ct_len="$(wc -c < "$ct_file" | tr -d '[:space:]')"
+  case "$ct_len" in
+    256|512) ;;
+    *) rm -rf "$LOGIN_DIR"; die "Received a key of the wrong size. Run ./ordering login again." ;;
+  esac
+
+  block_file="$(tmpfile)"
+  dd if="$ct_file" of="$block_file" bs=256 count=1 2>/dev/null
+  payload="$(openssl pkeyutl -decrypt -inkey "$LOGIN_DIR/private.pem" \
+    -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -pkeyopt rsa_mgf1_md:sha256 \
+    -in "$block_file" 2>/dev/null)" \
+    || { rm -rf "$LOGIN_DIR"; die "Could not decrypt the key. Run ./ordering login again."; }
+
+  if [ "$ct_len" = 512 ]; then
+    block_file="$(tmpfile)"
+    dd if="$ct_file" of="$block_file" bs=256 skip=1 count=1 2>/dev/null
+    payload2="$(openssl pkeyutl -decrypt -inkey "$LOGIN_DIR/private.pem" \
+      -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -pkeyopt rsa_mgf1_md:sha256 \
+      -in "$block_file" 2>/dev/null)" \
+      || { rm -rf "$LOGIN_DIR"; die "Could not decrypt the API key. Nothing was saved. Run ./ordering login again."; }
+  fi
+  rm -rf "$LOGIN_DIR"
+
+  # Read the API key's id as soon as block 2 is decrypted, so that any later
+  # failure in this function (on either block) can still point at a key the
+  # page already created server-side, even though this terminal never saves it.
+  if [ -n "$payload2" ]; then
+    api_key_id="$(json_get "$payload2" ai)"
+    [ -n "$api_key_id" ] || api_key_id="unknown"
+    api_hint=" An API key (id \"$api_key_id\") was also created for this sign-in and was not saved either. Revoke it in the Dashboard: $DASHBOARD_API_KEYS_URL"
+  fi
+
+  version="$(json_get "$payload" v)"; pid="$(json_get "$payload" i)"
+  project="$(json_get "$payload" p)"; key="$(json_get "$payload" k)"; local payload_project="$payload"; payload=""
+  if [ "$version" != "1" ] || [ "$pid" != "$id" ]; then
+    die "Received a key for another sign-in. Nothing was saved.$api_hint Run ./ordering login again."
+  fi
+  [[ "$project" =~ ^[a-zA-Z0-9_-]+$ ]] || die "Received an invalid project. Nothing was saved.$api_hint Run ./ordering login again."
+  if [ "$project_only" = 1 ]; then
+    [ "$ct_len" = 256 ] && [ "$(json_get "$payload_project" m)" = marketplace-project ] && [ -z "$key" ] || die "Expected only a selected project; no credentials were saved."
+    printf '{"v":1,"project":"%s","source":"portal"}' "$project" | node "$ROOT/scripts/marketplace-config.mjs" --save-selection
+    ok "Project '$project' selected. No MCP or REST key created; continue with marketplace:configure."
+    return 0
+  fi
+  [[ "$key" =~ ^ord_mcp_[A-Za-z0-9_-]+$ ]] || die "Received an invalid key. Nothing was saved.$api_hint Run ./ordering login again."
+
+  if [ -n "$payload2" ]; then
+    api_version="$(json_get "$payload2" v)"; pid2="$(json_get "$payload2" i)"
+    api_key="$(json_get "$payload2" a)"; payload2=""
+    if [ "$api_version" != "1" ] || [ "$pid2" != "$id" ]; then
+      die "Received an API key for another sign-in. Nothing was saved, including the MCP key. Revoke API key id \"$api_key_id\" in the Dashboard: $DASHBOARD_API_KEYS_URL"
+    fi
+    [[ "$api_key" =~ ^[A-Za-z0-9_-]{20,128}$ ]] || die "Received an invalid API key. Nothing was saved, including the MCP key. Revoke API key id \"$api_key_id\" in the Dashboard: $DASHBOARD_API_KEYS_URL"
+  fi
+
+  # Accept the MCP key only if it is the one created for this sign-in: its name ends with our id.
+  mcp_whoami "$project" "$key"
+  key_name="$(json_get "$MCP_BODY" result.structuredContent.token.name)"
+  if [ "$HTTP_CODE" != "200" ] || [ "${key_name: -8}" != "${id:0:8}" ]; then
+    key=""
+    die "The received key could not be verified as yours (HTTP $HTTP_CODE). Nothing was saved.$api_hint If you didn't start this sign-in, revoke unknown keys in the Dashboard."
+  fi
+
+  # Accept the API key only if it belongs to the same person as the MCP key above.
+  if [ -n "$api_key" ]; then
+    local mcp_user_id api_error api_user_id
+    mcp_user_id="$(json_get "$MCP_BODY" result.structuredContent.user.id)"
+    api_users_me "$project" "$api_key"
+    api_error="$(json_get "$API_BODY" error)"
+    api_user_id="$(json_get "$API_BODY" result.id)"
+    if [ "$HTTP_CODE" != "200" ] || [ "$api_error" != "false" ] || [ -z "$api_user_id" ] || [ "$api_user_id" != "$mcp_user_id" ]; then
+      key=""; api_key=""
+      die "The received API key could not be verified as yours (HTTP $HTTP_CODE). Nothing was saved, including the MCP key. Revoke API key id \"$api_key_id\" in the Dashboard: $DASHBOARD_API_KEYS_URL"
+    fi
+  fi
+
+  [ -f "$ENV_FILE" ] || cp "$ROOT/env.example" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  set_env_line ORDERING_PROJECT "$project"
+  set_env_line ORDERING_MCP_KEY "$key"
+  export ORDERING_PROJECT="$project" ORDERING_MCP_KEY="$key"
+  ok "Signed in as $(json_get "$MCP_BODY" result.structuredContent.user.name) ($(json_get "$MCP_BODY" result.structuredContent.user.role)) on project '$project'. Check that this is you and your project."
+  ok "Key \"$key_name\" saved to .env"
+  hint "To revoke it later: Dashboard > MCP settings, key \"$key_name\"."
+
+  if [ -n "$api_key" ]; then
+    set_env_line ORDERING_API_KEY "$api_key"
+    export ORDERING_API_KEY="$api_key"
+    ok "REST API connected"
+    warn "This key has full access with your permissions and does not expire."
+    hint "To revoke it: Dashboard > Settings > Developers > API Keys."
+    api_key=""
+  elif [ -n "$old_api_key" ]; then
+    if [ "$old_project" = "$project" ]; then
+      warn "Your existing REST API key for this project was kept. This sign-in did not include a new one."
+    else
+      set_env_line ORDERING_API_KEY ""
+      export ORDERING_API_KEY=""
+      warn "Cleared the REST API key left over from project \"$old_project\". This sign-in did not include a new one for '$project'."
+    fi
+  fi
+
+  if [ -z "${ORDERING_LOGIN_SKIP_PLUGIN:-}" ] && have claude && claude plugin list 2>/dev/null | grep -q "$PLUGIN_ID"; then
+    if printf '{"project":"%s","mcp_key":"%s"}' "$project" "$key" | claude plugin configure "$PLUGIN_ID" --values-stdin >/dev/null 2>&1; then
+      ok "Claude Code plugin updated (key stored in your system keychain)"
+    else
+      warn "Could not update the Claude Code plugin. Run: claude plugin configure $PLUGIN_ID"
+    fi
+  fi
+  key=""
+  if [ -n "${ORDERING_LOGIN_SKIP_DOCTOR:-}" ]; then return 0; fi
+  cmd_doctor
+  if [ "$install_after_login" = 1 ]; then cmd_install; fi
+}
+
+# Re-prints the current code and the minutes left, without the link and without
+# opening a browser. For an agent that was asked "what's my code?" after the
+# TELL THE USER block scrolled out of view. Never prints the claim secret or
+# the private key: only the code and the expiry are read from .login/.
+cmd_login_code() {
+  [ -f "$LOGIN_DIR/code" ] || die "No sign-in in progress. Run ./ordering login first."
+  local code expires now mins
+  code="$(cat "$LOGIN_DIR/code")"
+  expires="$(cat "$LOGIN_DIR/expires" 2>/dev/null || echo 0)"
+  now="$(date +%s)"
+  if [ "$now" -ge "$expires" ]; then
+    rm -rf "$LOGIN_DIR"
+    die "The sign-in link expired. Run ./ordering login again."
+  fi
+  mins=$(( (expires - now + 59) / 60 ))
+  printf '  Code: %s%s%s (%s minute(s) left)\n' "$C_B" "$code" "$C_0" "$mins"
+}
+
+cmd_login() {
+  local sub="" client_arg="" timeout="" install_after=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      start|wait|code) sub="$1" ;;
+      --client) client_arg="${2:-}"; shift ;;
+      --client=*) client_arg="${1#--client=}" ;;
+      --install) die "Global client installation is outside bundled Marketplace pairing" ;;
+      --timeout) timeout="${2:-}"; shift ;;
+      *) die "Usage: ./ordering login [start|wait|code] [--client claude|codex] [--install]" ;;
+    esac
+    shift
+  done
+  case "$sub" in
+    start)
+      cmd_login_start "$(login_client "$client_arg")"
+      [ "$install_after" = 0 ] || touch "$LOGIN_DIR/install"
+      ;;
+    wait)
+      if [ "$install_after" = 1 ] && [ -d "$LOGIN_DIR" ]; then touch "$LOGIN_DIR/install"; fi
+      cmd_login_wait "${timeout:-540}"
+      ;;
+    code) cmd_login_code ;;
+    "")
+      cmd_login_start "$(login_client "$client_arg")"
+      [ "$install_after" = 0 ] || touch "$LOGIN_DIR/install"
+      cmd_login_wait "${timeout:-$LOGIN_TTL}"
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------- install
+
+MARK_BEGIN="# >>> ordering.co mcp >>>"
+MARK_END="# <<< ordering.co mcp <<<"
+
+shell_profile() {
+  case "$(basename "${SHELL:-}")" in
+    zsh) echo "${ZDOTDIR:-$HOME}/.zshrc" ;;
+    bash) if [ "$(uname)" = "Darwin" ]; then echo "$HOME/.bash_profile"; else echo "$HOME/.bashrc"; fi ;;
+    *) echo "" ;;
+  esac
+}
+
+remove_profile_block() {
+  local f="$1" tmp
+  [ -f "$f" ] || return 0
+  grep -qF "$MARK_BEGIN" "$f" || return 0
+  tmp="$(tmpfile)"
+  awk -v b="$MARK_BEGIN" -v e="$MARK_END" '$0 == b {skip=1; next} $0 == e {skip=0; next} !skip' "$f" > "$tmp"
+  cat "$tmp" > "$f"
+}
+
+# The official Claude Code plugin: the MCP server plus a skill that knows the platform.
+# The key goes to the system keychain through stdin, never through arguments.
+PLUGIN_REPO="Finitless-com/ordering-mcp-plugin"
+PLUGIN_MARKETPLACE="ordering-dev"
+PLUGIN_ID="ordering@$PLUGIN_MARKETPLACE"
+
+# Prints: installed | available | conflict | unknown
+claude_plugin_state() {
+  local markets plugins repo
+  have jq || { echo unknown; return; }
+  markets="$(claude plugin marketplace list --json 2>/dev/null || true)"
+  plugins="$(claude plugin list --json 2>/dev/null || true)"
+  repo="$(printf '%s' "$markets" | jq -r --arg m "$PLUGIN_MARKETPLACE" '.[]? | select(.name == $m) | .repo // .url // .source' 2>/dev/null | head -1)"
+  if [ -z "$repo" ]; then echo available
+  elif [ "$repo" != "$PLUGIN_REPO" ]; then echo conflict
+  elif printf '%s' "$plugins" | jq -e --arg id "$PLUGIN_ID" '.[]? | select(.id == $id)' >/dev/null 2>&1; then echo installed
+  else echo available
+  fi
+}
+
+
+# Prints the MCP variables from .env as shell exports, for your shell profile.
+# The REST API key is never exported this way.
+cmd_shell_env() {
+  local k
+  for k in ORDERING_PROJECT ORDERING_MCP_KEY; do
+    [ -n "${!k:-}" ] && printf 'export %s=%q\n' "$k" "${!k}"
+  done
+  return 0
+}
+
+# Dependencies are locked separately; the login/API helper itself remains bash-only.
+client_runtime() {
+  if ! have node || ! have npm; then
+    die "Global multi-client setup requires Node.js 22+ and npm. Login is saved; install Node, then rerun ./ordering install."
+  fi
+  node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' || die "Node.js 22+ is required."
+  mkdir -p "$ROOT/.clients"
+  chmod 700 "$ROOT/.clients"
+  if ! cmp -s "$ROOT/client-installer/package-lock.json" "$ROOT/.clients/runtime-ready" ||
+    [ ! -f "$ROOT/.clients/node_modules/mcp-remote/dist/proxy.js" ] ||
+    [ ! -f "$ROOT/.clients/node_modules/add-mcp/dist/lib.js" ] ||
+    [ ! -f "$ROOT/.clients/node_modules/jsonc-parser/lib/umd/main.js" ]; then
+    rm -f "$ROOT/.clients/runtime-ready"
+    cp "$ROOT/client-installer/package.json" "$ROOT/client-installer/package-lock.json" "$ROOT/.clients/"
+    npm ci --prefix "$ROOT/.clients" --ignore-scripts --no-audit --no-fund >&2 || die "Could not prepare the client installer. Login is saved; rerun ./ordering install."
+    if [ ! -f "$ROOT/.clients/node_modules/mcp-remote/dist/proxy.js" ] ||
+      [ ! -f "$ROOT/.clients/node_modules/add-mcp/dist/lib.js" ] ||
+      [ ! -f "$ROOT/.clients/node_modules/jsonc-parser/lib/umd/main.js" ]; then
+      die "Client runtime is incomplete. Login is saved; rerun ./ordering install."
+    fi
+    cp "$ROOT/client-installer/package-lock.json" "$ROOT/.clients/runtime-ready"
+  fi
+  command -v node > "$ROOT/.clients/node-path"
+  chmod 600 "$ROOT/.clients/node-path"
+}
+
+client_action() {
+  [ -f "$ROOT/.clients/node-path" ] || die "Clients are not installed. Run ./ordering install."
+  local node_path; node_path="$(cat "$ROOT/.clients/node-path")"
+  "$node_path" "$ROOT/scripts/client-installer.mjs" "$ROOT" "$1" "${ORDERING_PROJECT:-}"
+}
+
+cmd_mcp() {
+  require_project
+  [ -n "${ORDERING_MCP_KEY:-}" ] || die "No MCP key. Run ./ordering login."
+  [ -f "$ROOT/.clients/node-path" ] || die "MCP launcher is not installed. Run ./ordering install."
+  local node_path; node_path="$(cat "$ROOT/.clients/node-path")"
+  [ -x "$node_path" ] || die "The Node runtime moved. Rerun ./ordering install."
+  # The inherited REST key must never reach MCP clients or their proxy.
+  unset ORDERING_API_KEY
+  rm -rf "$TMP_DIR"
+  # Placeholder stays literal in argv; mcp-remote resolves it from the environment.
+  # shellcheck disable=SC2016
+  set -- --transport http-only --header 'Authorization:Bearer ${ORDERING_MCP_KEY}' --silent
+  case "$API_HOST" in http://127.0.0.1:*) set -- "$@" --allow-http ;; esac
+  exec "$node_path" "$ROOT/.clients/node_modules/mcp-remote/dist/proxy.js" "$(mcp_url)" "$@"
+}
+
+cmd_install() {
+  require_project
+  [ -n "${ORDERING_MCP_KEY:-}" ] || die "ORDERING_MCP_KEY is empty. Run ./ordering login."
+  title "Verify the connection"
+  mcp_whoami "$ORDERING_PROJECT" "$ORDERING_MCP_KEY"
+  if [ "$HTTP_CODE" != 200 ] || [ "$(json_get "$MCP_BODY" result.structuredContent.project)" != "$ORDERING_PROJECT" ]; then
+    die "MCP verification failed; no client configuration changed."
+  fi
+  ok "Authenticated on project '$ORDERING_PROJECT'"
+  unset ORDERING_API_KEY
+  client_runtime
+  title "Verify the desktop-safe MCP launcher"
+  client_action probe || die "MCP launcher failed. No client configuration changed."
+  title "Register detected clients globally"
+  client_action install || die "Some clients were not registered. Review the individual results; do not treat this as complete."
+  title "Verify registrations"
+  client_action status || die "Some registrations could not be verified."
+  echo
+  ok "MCP authenticated, launcher verified, and detected clients registered."
+  hint "Restart running clients or reload their MCP settings, then ask: Who am I in Ordering?"
+}
+
+# Removes the shell integration and the 'ordering' server from Claude Code and
+# Codex. Shared by uninstall (keeps .env) and logout (also clears the key).
+remove_mcp_registrations() {
+  local profile; profile="$(shell_profile)"
+  if [ -n "$profile" ]; then
+    remove_profile_block "$profile"
+    ok "Removed the Ordering block from $profile"
+  fi
+  if have claude && claude mcp remove ordering -s user >/dev/null 2>&1; then
+    ok "Claude Code: 'ordering' removed"
+  fi
+  if have codex && codex mcp remove ordering >/dev/null 2>&1; then
+    ok "Codex: 'ordering' removed"
+  fi
+}
+
+cmd_uninstall() {
+  if [ -f "$ROOT/.clients/installed.json" ]; then
+    client_action uninstall || die "Some changed registrations were preserved; review the results."
+    local profile; profile="$(shell_profile)"
+    [ -z "$profile" ] || remove_profile_block "$profile"
+  else
+    remove_mcp_registrations
+  fi
+  ok "Your .env and your keys were not touched. Revoke unwanted keys in the Dashboard."
+  hint "Reload running clients to drop cached tools and credentials."
+}
+
+# True if this Claude Code CLI's 'plugin' subcommand has an 'uninstall' action.
+# Older CLIs don't, so the plugin has to be removed from Settings > Plugins instead.
+claude_plugin_can_uninstall() {
+  have claude || return 1
+  claude plugin --help 2>/dev/null | grep -q 'uninstall'
+}
+
+DASHBOARD_MCP_URL="https://dashboard.ordering.co/settings?group=developers&category=developers&id=mcpTokens"
+DASHBOARD_API_KEYS_URL="https://dashboard.ordering.co/settings?group=developers&category=developers&id=apiKeys"
+
+# Disconnects this folder: removes the key from .env (keeps the project), removes the
+# Claude Code plugin or server and the Codex server, and removes the shell integration.
+# The key itself is never printed, and nothing here revokes it on the server: that's
+# the developer's call, from the Dashboard link this prints.
+cmd_logout() {
+  local key_name=""
+  if [ -n "${ORDERING_PROJECT:-}" ] && [ -n "${ORDERING_MCP_KEY:-}" ]; then
+    if mcp_whoami "$ORDERING_PROJECT" "$ORDERING_MCP_KEY" && [ "$HTTP_CODE" = "200" ]; then
+      key_name="$(json_get "$MCP_BODY" result.structuredContent.token.name)"
+    fi
+  fi
+
+  title "Shell and agents"
+  cmd_uninstall
+  if have claude && [ "$(claude_plugin_state)" = "installed" ]; then
+    if claude_plugin_can_uninstall; then
+      if claude plugin uninstall "$PLUGIN_ID" >/dev/null 2>&1; then
+        ok "Claude Code: Ordering plugin uninstalled"
+      else
+        warn "Could not uninstall the Claude Code plugin. Run: claude plugin uninstall $PLUGIN_ID"
+      fi
+    else
+      warn "This Claude Code can't uninstall plugins from the CLI."
+      hint "Remove it yourself: claude plugin uninstall $PLUGIN_ID (or Settings > Plugins)"
+    fi
+  fi
+
+  title "Key"
+  local had_api_key=""
+  if [ -f "$ENV_FILE" ]; then
+    set_env_line ORDERING_MCP_KEY ""
+    ok "Removed the MCP key from .env (your project stays set)"
+    if [ -n "${ORDERING_API_KEY:-}" ]; then
+      had_api_key=1
+      set_env_line ORDERING_API_KEY ""
+      ok "Removed the REST API key from .env"
+    fi
+  else
+    ok "No .env here."
+  fi
+
+  echo
+  if [ -n "$key_name" ]; then
+    printf '  Key "%s%s%s" is no longer used here.\n' "$C_B" "$key_name" "$C_0"
+  else
+    printf '  No MCP key was in use here.\n'
+  fi
+  printf '  %sThis key still works until you revoke it.%s\n' "$C_WARN" "$C_0"
+  printf '  %s\n' "$DASHBOARD_MCP_URL"
+  if [ -n "$had_api_key" ]; then
+    printf '  %sThe REST API key still works until you revoke it too, in Dashboard > Settings > Developers > API Keys.%s\n' "$C_WARN" "$C_0"
+    printf '  %s\n' "$DASHBOARD_API_KEYS_URL"
+  fi
+  echo
+  if ! is_agent_session && [ -z "${ORDERING_NO_BROWSER:-}" ] && [ -z "${SSH_CONNECTION:-}" ]; then
+    if [ "$(uname)" = "Darwin" ]; then open "$DASHBOARD_MCP_URL" 2>/dev/null || true
+    elif have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then xdg-open "$DASHBOARD_MCP_URL" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
+cmd_reset() {
+  cmd_logout
+  cmd_login "$@"
+}
+
+# ---------------------------------------------------------------- api
+
+AUDIT_LOG="$ROOT/.api-audit.log"
+
+# redact_secrets <file>: replaces the current ORDERING_API_KEY and ORDERING_MCP_KEY
+# values with *** in place. The values travel through awk's environment (ENVIRON),
+# never as a -v argument, so they never show up in this process's argv.
+redact_secrets() {
+  local f="$1" tmp
+  [ -n "${ORDERING_API_KEY:-}${ORDERING_MCP_KEY:-}" ] || return 0
+  tmp="$(tmpfile)"
+  REDACT_API_KEY="${ORDERING_API_KEY:-}" REDACT_MCP_KEY="${ORDERING_MCP_KEY:-}" awk '
+    BEGIN { a = ENVIRON["REDACT_API_KEY"]; m = ENVIRON["REDACT_MCP_KEY"] }
+    {
+      line = $0
+      if (length(a) > 0) gsub(a, "***", line)
+      if (length(m) > 0) gsub(m, "***", line)
+      print line
+    }
+  ' "$f" > "$tmp"
+  cat "$tmp" > "$f"
+}
+
+# audit_log METHOD PATH DATA: appends one line to .api-audit.log for a write that
+# was actually confirmed and sent (never for a refusal). Logs the method, the path
+# with control characters stripped, and a sha256 of the body, never the body itself.
+audit_log() {
+  local method="$1" path="$2" data="$3" ts path_clean body_hash
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  path_clean="$(printf '%s' "$path" | tr -d '\000-\037\177')"
+  if [ -n "$data" ]; then
+    case "$data" in
+      @*) body_hash="$(sha256_hex < "${data#@}")" ;;
+      *)  body_hash="$(printf '%s' "$data" | sha256_hex)" ;;
+    esac
+  else
+    body_hash="-"
+  fi
+  : >> "$AUDIT_LOG"
+  chmod 600 "$AUDIT_LOG" 2>/dev/null || true
+  printf '%s %s %s sha256=%s\n' "$ts" "$method" "$path_clean" "$body_hash" >> "$AUDIT_LOG"
+}
+
+cmd_api() {
+  # --yes may appear anywhere after 'api': ./ordering api --yes POST /x '{}' and
+  # ./ordering api POST --yes /x '{}' are both valid.
+  local yes="" rest=() a
+  for a in "$@"; do
+    case "$a" in
+      --yes) yes=1 ;;
+      *) rest+=("$a") ;;
+    esac
+  done
+  set -- "${rest[@]}"
+  [ $# -ge 2 ] || die 'Usage: ./ordering api [--yes] METHOD PATH [JSON | @file.json]   e.g. ./ordering api GET "/orders?page_size=5&mode=dashboard"'
+  require_project
+  [ -n "${ORDERING_API_KEY:-}" ] || die "ORDERING_API_KEY is empty. Add it to .env (see .env.example)."
+
+  local method path data
+  method="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"; path="$2"; data="${3:-}"
+  case "$method" in GET|POST|PUT|PATCH|DELETE) ;; *) die "Unsupported method: $method" ;; esac
+  case "$path" in /*) ;; *) path="/$path" ;; esac
+  case "$path" in *://*) die "PATH must be relative, e.g. /orders" ;; esac
+  if [ "$method" = "GET" ] && [ -n "$data" ]; then
+    die "GET does not take a body. Pass a JSON body only with POST, PUT, PATCH or DELETE."
+  fi
+
+  if [ "$method" != "GET" ]; then
+    # Writes need either a person at an interactive terminal, or an agent passing --yes
+    # after the person approved this exact request in the chat. This is a guardrail
+    # against accidental writes, not a security boundary: anyone with the key can call
+    # the API directly.
+    if [ -n "$yes" ]; then
+      printf 'CONFIRMED %s %s on %s\n' "$method" "$path" "$ORDERING_PROJECT" >&2
+    elif [ -t 0 ] && [ -r /dev/tty ]; then
+      printf '%s%s %s%s on project %s%s%s (production, no sandbox)\n' "$C_WARN" "$method" "$path" "$C_0" "$C_B" "$ORDERING_PROJECT" "$C_0" >/dev/tty
+      printf 'Type the project ID to confirm: ' >/dev/tty
+      local answer; IFS= read -r answer </dev/tty
+      [ "$answer" = "$ORDERING_PROJECT" ] || die "Not confirmed. Nothing was sent."
+    else
+      die "$method changes production data and needs confirmation: run it yourself at an interactive terminal, or pass --yes after the person approved this exact request in the chat."
+    fi
+    audit_log "$method" "$path" "$data"
+  fi
+
+  local args=(-sS -m 30 -X "$method" -H "@$(header_file "X-Api-Key: $ORDERING_API_KEY")" -H "Accept: application/json")
+  if [ -n "$data" ]; then
+    case "$data" in @*) [ -f "${data#@}" ] || die "File not found: ${data#@}" ;; esac
+    args+=(-H "Content-Type: application/json" --data-binary "$data")
+  fi
+  local tmp code
+  tmp="$(tmpfile)"
+  code="$(curl "${args[@]}" -o "$tmp" -w '%{http_code}' "$(api_base)$path")" || code="000"
+  [ -n "$code" ] || code="000"
+  redact_secrets "$tmp"
+  pretty "$tmp"
+  if [ "$code" = "000" ] || [ "$code" -ge 400 ]; then
+    printf '%sHTTP %s%s\n' "$C_ERR" "$code" "$C_0" >&2
+    exit 1
+  fi
+}
+
+# ---------------------------------------------------------------- spec
+
+cmd_spec() {
+  mkdir -p "$ROOT/spec"
+  curl -fsS -m 60 -o "$ROOT/spec/openapi.json.tmp" "$SPEC_URL" || die "Download failed: $SPEC_URL"
+  mv "$ROOT/spec/openapi.json.tmp" "$ROOT/spec/openapi.json"
+  local n=""
+  if have jq; then
+    n="$(jq '[.paths[] | keys[] | select(. == "get" or . == "post" or . == "put" or . == "patch" or . == "delete")] | length' "$ROOT/spec/openapi.json" 2>/dev/null || true)"
+  fi
+  ok "Saved spec/openapi.json${n:+ ($n operations)}. Import it in Postman, or generate a typed client from it."
+}
+
+# ---------------------------------------------------------------- main
+
+usage() {
+  sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  echo
+  echo "Docs: $DOCS_URL"
+}
+
+export ORDERING_LOGIN_SKIP_PLUGIN=1
+case "${1:-help}" in login|project-login|marketplace-project|marketplace-config|help|-h|--help) ;; *) die "Bundled helper supports login and marketplace-config only; global clients remain untouched" ;; esac
+load_env
+cmd="${1:-help}"; [ $# -gt 0 ] && shift
+case "$cmd" in
+  project-login) PROJECT_ONLY_LOGIN=1; cmd_login "$@" ;;
+  login)         cmd_login "$@" ;;
+  init)          cmd_init "$@" ;;
+  marketplace-project) node "$ROOT/scripts/marketplace-config.mjs" --connection ;;
+  marketplace-config) node "$ROOT/scripts/marketplace-config.mjs" "${1:-}" ;;
+  doctor)        cmd_doctor ;;
+  install)       cmd_install ;;
+  uninstall)     cmd_uninstall ;;
+  logout|disconnect) cmd_logout ;;
+  reset)         cmd_reset "$@" ;;
+  shell-env)     cmd_shell_env ;;
+  mcp)           cmd_mcp ;;
+  clients)       client_action status ;;
+  prepare)       client_runtime ;;
+  claude)        cmd_claude "$@" ;;
+  codex)         cmd_codex "$@" ;;
+  cursor|code)   cmd_editor "$cmd" "$@" ;;
+  api)           cmd_api "$@" ;;
+  spec)          cmd_spec ;;
+  help|-h|--help) printf 'Usage: ordering login start|wait|code [--client codex|claude] | ordering marketplace-config EXPECTED_PROJECT\n' ;;
+  *)             usage; exit 1 ;;
+esac

@@ -707,7 +707,7 @@ export const App = () => {
   }, [auth, oneSignalState?.notification_token])
 
   useEffect(() => {
-    if (configLoading || !hasConsented) return
+    if (settings._local_project_pin || configLoading || !hasConsented) return
     if (isFirebasePushEnabled(configs)) {
       firebaseWebPushSetup()
       return
