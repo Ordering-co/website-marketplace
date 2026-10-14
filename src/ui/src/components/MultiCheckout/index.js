@@ -49,6 +49,7 @@ import { CheckoutStudentDetails } from '~ui/src/components/CheckoutStudentDetail
 import { doesAnySchoolCartNeedStudent, isSchoolCart } from '~ui/src/components/CheckoutStudentDetails/schoolCartStudent'
 import { generalUtilities } from '~ui/utils'
 import { useBusinessVerticals } from '~ui/hooks/useBusinessVerticals'
+import { useGuestCheckoutPermission } from '~ui/hooks/useGuestCheckoutPermission'
 import { Icon } from '~ui-icon'
 
 const mapConfigs = {
@@ -91,6 +92,11 @@ const MultiCheckoutUI = (props) => {
   const [validationFields] = useValidationFields()
   const [{ user, loading: userLoading }, { login }] = useSession()
   const [orderState] = useOrder()
+  const { guestCheckoutAllowed, guestOrderBlocked, canUseGuestCheckout, canPlaceOrder } = useGuestCheckoutPermission({
+    configs,
+    orderType: orderState?.options?.type,
+    user
+  })
   const history = useHistory()
   const [, { showToast }] = useToast()
   const theme = useTheme()
@@ -107,6 +113,10 @@ const MultiCheckoutUI = (props) => {
   const [productLoading, setProductLoading] = useState(false)
   const [assignedStudents, setAssignedStudents] = useState({})
   const businessVerticals = useBusinessVerticals(openCarts.map((cart) => cart?.business_id))
+
+  useEffect(() => {
+    if (!guestCheckoutAllowed) setAllowedGuest(false)
+  }, [guestCheckoutAllowed])
 
   const studentCarts = openCarts.map((cart) => {
     const contextCart = orderState?.carts?.[`businessId:${cart?.business_id}`]
@@ -129,6 +139,7 @@ const MultiCheckoutUI = (props) => {
 
   const walletCarts = (Object.values(orderState?.carts)?.filter(cart => cart?.products && cart?.products?.length && cart?.status !== 2 && cart?.valid_schedule && cart?.valid_products && cart?.valid_address && cart?.valid_maximum && cart?.valid_minimum && cart?.wallets?.length > 0) || null) || []
   const isDisablePlaceOrderButton = cartGroup?.loading ||
+    guestOrderBlocked ||
     schoolNeedsStudent ||
     (!(paymethodSelected?.paymethod_id || paymethodSelected?.wallet_id) && cartGroup?.result?.balance > 0) ||
     (paymethodSelected?.paymethod?.gateway === 'stripe' && !paymethodSelected?.paymethod_data) ||
@@ -172,7 +183,12 @@ const MultiCheckoutUI = (props) => {
   const loyaltyRewardValue = openCarts.reduce((sum, cart) => sum + clearAmount((cart?.subtotal + getIncludedTaxes(cart)) * accumulationRateBusiness(cart?.business_id)), 0)
 
   const handlePlaceOrder = () => {
+    if (!canPlaceOrder()) return
     if (schoolNeedsStudent) return
+    if (!user && !canUseGuestCheckout()) {
+      setOpenModal({ ...openModal, signup: true, isGuest: false })
+      return
+    }
     if (stripePaymethods.includes(paymethodSelected?.gateway) && user?.guest_id) {
       setOpenModal({ ...openModal, signup: true, isGuest: true })
       return
@@ -194,6 +210,7 @@ const MultiCheckoutUI = (props) => {
   }
 
   const handlePlaceOrderAsGuest = () => {
+    if (!canPlaceOrder(true)) return
     if (schoolNeedsStudent) return
     setIsOpen(false)
     handleGroupPlaceOrder && handleGroupPlaceOrder(actionsBeforePlace)
@@ -353,7 +370,7 @@ const MultiCheckoutUI = (props) => {
                 />
                 <UserDetailsContainer>
                   <WrapperUserDetails>
-                    {(user?.guest_id && !allowedGuest)
+                    {(user?.guest_id && (!allowedGuest || !guestCheckoutAllowed))
                       ? (
                         <AuthButtonList>
                           <h2>{t('CUSTOMER_DETAILS', 'Customer details')}</h2>
@@ -363,9 +380,11 @@ const MultiCheckoutUI = (props) => {
                           <Button color='primary' outline onClick={() => setOpenModal({ ...openModal, login: true })}>
                             {t('LOGIN', 'Login')}
                           </Button>
-                          <Button color='black' outline onClick={() => setAllowedGuest(true)}>
-                            {t('CONTINUE_AS_GUEST', 'Continue as guest')}
-                          </Button>
+                          {guestCheckoutAllowed && (
+                            <Button color='black' outline onClick={() => canUseGuestCheckout() && setAllowedGuest(true)}>
+                              {t('CONTINUE_AS_GUEST', 'Continue as guest')}
+                            </Button>
+                          )}
                         </AuthButtonList>
                         )
                       : (
@@ -553,6 +572,11 @@ const MultiCheckoutUI = (props) => {
               </CartContainer>
               {!disabledStatusses.includes(cartGroup?.result?.status) && (
                 <WrapperPlaceOrderButton>
+                  {guestOrderBlocked && (
+                    <WarningText role='alert'>
+                      {t('GUEST_CHECKOUT_DISABLED', 'Guest checkout is not available for this order type.')}
+                    </WarningText>
+                  )}
                   <Button
                     color='primary'
                     disabled={isDisablePlaceOrderButton || placing || cartGroup?.loading}
@@ -596,8 +620,9 @@ const MultiCheckoutUI = (props) => {
                   isEdit
                   isModal
                   handlePlaceOrderAsGuest={handlePlaceOrderAsGuest}
-                  isAllowGuest={paymethodSelected?.gateway === 'cash' || paymethodSelected?.gateway === 'card_delivery'}
+                  isAllowGuest={guestCheckoutAllowed && (paymethodSelected?.gateway === 'cash' || paymethodSelected?.gateway === 'card_delivery')}
                   onClose={() => {
+                    if (!canPlaceOrder()) return
                     setIsOpen(false)
                     handlePlaceOrder()
                   }}

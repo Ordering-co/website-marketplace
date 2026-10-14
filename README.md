@@ -7,8 +7,8 @@ React 18 storefront using Vite, styled-components and the Ordering API. Browse b
 Use Node 24 and pnpm 9.15.0. The shared components are a Git submodule.
 
 ```sh
-git clone --recurse-submodules https://github.com/Ordering-co/website-marketplace-v26.git
-cd website-marketplace-v26
+git clone --recurse-submodules https://github.com/Ordering-co/website-marketplace.git
+cd website-marketplace
 corepack enable
 corepack prepare pnpm@9.15.0 --activate
 HUSKY=0 pnpm install --frozen-lockfile

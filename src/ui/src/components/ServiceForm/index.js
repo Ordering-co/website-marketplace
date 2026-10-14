@@ -55,8 +55,9 @@ import { Modal } from '~ui/src/components/Modal'
 import { LoginForm } from '~ui/src/components/LoginForm'
 import { SignUpForm } from '~ui/src/components/SignUpForm'
 import { Button } from '~ui/src/styles/Buttons'
-import { getTimes, orderTypeList } from '~ui/utils'
+import { getTimes } from '~ui/utils'
 import { ForgotPasswordForm } from '~ui/src/components/ForgotPasswordForm'
+import { isGuestCheckoutAllowed } from '~/utils/guestCheckout'
 
 import { Icon } from '~ui-icon'
 
@@ -93,8 +94,7 @@ const ServiceFormUI = (props) => {
   const [isEnabled, setIsEnabled] = useState(false)
   const [datesList, setDatesList] = useState([])
 
-  const guestCheckoutEnabled = configs?.guest_checkout_enabled?.value === '1'
-  const orderTypeEnabled = !orderTypeList[orderState?.options?.type - 1] || configs?.allowed_order_types_guest_checkout?.value?.includes(orderTypeList[orderState?.options?.type - 1])
+  const guestCheckoutEnabled = isGuestCheckoutAllowed(configs, orderState?.options?.type)
 
   const dropDownRef = useRef()
 
@@ -104,7 +104,7 @@ const ServiceFormUI = (props) => {
   }
 
   const handleUpdateGuest = () => {
-    if (actionStatus?.loading) return
+    if (!isGuestCheckoutAllowed(configs, orderState?.options?.type) || actionStatus?.loading) return
     handleCreateGuestUser({ guest_token: nanoid() })
   }
 
@@ -525,7 +525,7 @@ const ServiceFormUI = (props) => {
                   {orderState?.loading ? t('LOADING', theme?.defaultLanguages?.LOADING || 'Loading...') : t('BOOK', 'Book')}
                 </Button>
               )}
-              {!auth && guestCheckoutEnabled && orderTypeEnabled && !actionStatus?.loading && (
+              {!auth && guestCheckoutEnabled && !actionStatus?.loading && (
                 <GuestUserLink onClick={handleUpdateGuest}>
                   {t('AS_GUEST_USER', 'As guest user')}
                 </GuestUserLink>

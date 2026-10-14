@@ -2,6 +2,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 import { renderWithProviders, defaultTheme } from '../../../../../../../__tests__/helpers/testUtils'
 import { OriginalBusinessesListing } from '../index'
+import { WrapperSearch } from '../styles'
+import { ServerStyleSheet } from 'styled-components'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 vi.mock('react-loading-skeleton/dist/skeleton.css', () => ({}))
 vi.mock('../../../../../../../utils/searchQueryLocation', () => ({
@@ -180,6 +183,28 @@ const listingTheme = {
 }
 
 describe('OriginalBusinessesListing', () => {
+  it.each([false, true])('adds phone-only search spacing with custom layout %s', (isCustomLayout) => {
+    const sheet = new ServerStyleSheet()
+    try {
+      renderToStaticMarkup(sheet.collectStyles(<WrapperSearch $hasMobileSearch isCustomLayout={isCustomLayout} />))
+      const css = sheet.getStyleTags()
+      expect(css).toMatch(/@media\s*\(max-width:\s*580px\)\{[^}]*margin-top:\s*16px/)
+      expect(css).toMatch(/@media\s*\(min-width:\s*581px\)\{[^}]*margin:\s*10px 20px 0px/)
+    } finally {
+      sheet.seal()
+    }
+  })
+
+  it.each([{ $hasMobileSearch: false }, { isCustomerMode: true }])('preserves spacing without the public mobile search: %j', (props) => {
+    const sheet = new ServerStyleSheet()
+    try {
+      renderToStaticMarkup(sheet.collectStyles(<WrapperSearch {...props} />))
+      expect(sheet.getStyleTags()).not.toContain('margin-top:16px')
+    } finally {
+      sheet.seal()
+    }
+  })
+
   beforeEach(() => {
     changeType.mockClear()
     listingFixture.current.onRedirectPage.mockClear()

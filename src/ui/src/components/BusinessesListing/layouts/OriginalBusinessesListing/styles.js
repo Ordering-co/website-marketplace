@@ -118,6 +118,12 @@ export const WrapperSearch = styled.div`
   @media(min-width: 581px){
     margin: 10px 20px 0px;
   }
+
+  ${({ $hasMobileSearch }) => $hasMobileSearch && css`
+    @media(max-width: 580px){
+      margin-top: 16px;
+    }
+  `}
 `
 
 export const ErrorMessage = styled.span`

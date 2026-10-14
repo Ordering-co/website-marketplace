@@ -50,9 +50,9 @@ import { useSite } from '~components/contexts/SiteContext'
 import { useConfig } from '~components/contexts/ConfigContext'
 import { parseUnaddressedOrderTypes, shouldRequireOrderAddress } from '~components/utils/orderTypeAddress'
 import { useSelectedStudent } from '~components/hooks/useSelectedStudent'
+import { isGuestCheckoutAllowed } from '~/utils/guestCheckout'
 
 import { StudentOnboardingPopup } from '~ui/src/components/StudentOnboardingPopup'
-import { orderTypeList } from '~ui/utils'
 import { Modal } from '~ui/src/components/Modal'
 import { Alert } from '~ui/src/components/Confirm'
 import { Button } from '~ui/src/styles/Buttons'
@@ -131,12 +131,11 @@ const ProductOptionsUI = (props) => {
 
   const [{ configs }] = useConfig()
   const unaddressedTypes = parseUnaddressedOrderTypes(configs?.unaddressed_order_types_allowed?.value)
-  const guestCheckoutEnabled = configs?.guest_checkout_enabled?.value === '1'
+  const guestCheckoutEnabled = isGuestCheckoutAllowed(configs, orderState?.options?.type)
   const { studentId: selectedStudent } = useSelectedStudent(business?.slug || businessSlug)
   const [studentPickerOpen, setStudentPickerOpen] = useState(false)
   const isSchoolProduct = configs?.school_module_enabled?.value === '1' && business?.vertical === 'school'
   const needsStudent = isSchoolProduct && auth && !selectedStudent
-  const orderTypeEnabled = !orderTypeList[orderState?.options?.type - 1] || configs?.allowed_order_types_guest_checkout?.value?.includes(orderTypeList[orderState?.options?.type - 1])
   const hideProductDescription = theme?.business_view?.components?.products?.components?.product?.components?.description?.hidden
   const fromWorker = typeof window !== 'undefined' && (window.__FIRST_LOAD__ || window.__CONFIG__)
   const hideProductDummyLogo = theme?.business_view?.components?.products?.components?.product?.components?.dummy?.hidden || fromWorker
@@ -282,7 +281,7 @@ const ProductOptionsUI = (props) => {
   }
 
   const handleUpdateGuest = () => {
-    if (actionStatus?.loading) return
+    if (!isGuestCheckoutAllowed(configs, orderState?.options?.type) || actionStatus?.loading) return
     handleCreateGuestUser({ guest_token: nanoid() })
   }
 
@@ -835,7 +834,7 @@ const ProductOptionsUI = (props) => {
                           )
                   )}
 
-                  {!auth && guestCheckoutEnabled && orderTypeEnabled && !hasNoAddress && !actionStatus?.loading && (
+                  {!auth && guestCheckoutEnabled && !hasNoAddress && !actionStatus?.loading && (
                     <GuestUserLink onClick={handleUpdateGuest}>
                       {t('AS_GUEST_USER', 'As guest user')}
                     </GuestUserLink>

@@ -9,7 +9,7 @@ vi.mock('@stripe/react-stripe-js', () => ({
   Elements: ({ children }) => <div data-testid='stripe-elements'>{children}</div>
 }))
 vi.mock('~ui/src/components/CardForm', () => ({
-  CardForm: () => <div data-testid='card-form' />
+  CardForm: ({ cardsGateway }) => <div data-testid='card-form' data-cards-gateway={cardsGateway} />
 }))
 vi.mock('~ui/src/components/StripeMethodForm', () => ({
   StripeMethodForm: () => <div data-testid='stripe-method-form' />
@@ -39,5 +39,10 @@ describe('StripeElementsForm', () => {
     const { getByTestId } = renderWithProviders(<StripeElementsForm />)
     expect(getByTestId('stripe-elements')).toBeInTheDocument()
     expect(getByTestId('card-form')).toBeInTheDocument()
+  })
+
+  it('hands the cards gateway to the card form', () => {
+    const { getByTestId } = renderWithProviders(<StripeElementsForm cardsGateway='stripe_connect_v2' />)
+    expect(getByTestId('card-form')).toHaveAttribute('data-cards-gateway', 'stripe_connect_v2')
   })
 })

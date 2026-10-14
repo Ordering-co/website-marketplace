@@ -231,7 +231,7 @@ const ProductItemAccordionUI = (props) => {
                 </span>
               </ProductPrice>
               <ProductActions hideQuantitySelector={hideQuantitySelector}>
-                {onDeleteProduct && product?.valid_quantity && product?.valid_menu && (
+                {onDeleteProduct && !isCartPending && product?.valid_quantity && product?.valid_menu && (
                   <>
                   {product?.quantity > 1
                     ? (
@@ -258,7 +258,7 @@ const ProductItemAccordionUI = (props) => {
                 {product?.quantity > 0 && (
                   <p className='quantity-item'>{product?.quantity}</p>
                 )}
-                {!isDisabledEdit && product?.valid_quantity && product?.valid_menu && (
+                {!isDisabledEdit && !isCartPending && product?.valid_quantity && product?.valid_menu && (
                   <ProductActionsIncrement
                     ref={productActionsIncrement}
                     onClick={handleIncrement}

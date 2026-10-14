@@ -26,7 +26,7 @@ export const CheckoutPage = (props) => {
   const websiteThemeType = theme?.my_products?.components?.website_theme?.components?.type
   const websiteThemeBusinessSlug = theme?.my_products?.components?.website_theme?.components?.business_slug
   const updatedBusinessSlug = (websiteThemeType === 'single_store' && websiteThemeBusinessSlug) || settings?.businessSlug
-  const stripePayments = ['stripe', 'stripe_connect', 'stripe_direct', 'google_pay', 'apple_pay']
+  const stripePayments = ['stripe', 'stripe_connect', 'stripe_connect_v2', 'stripe_direct', 'google_pay', 'apple_pay']
   const businessUrlTemplate = checkSiteUrl(site?.business_url_template, '/store/:business_slug')
 
   const useQuery = () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../../../../__tests__/helpers/testUtils'
 import { Checkout } from '../index'
 
@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => {
     sessionActions: { login: noop },
     configState: { configs: {} },
     customerState: { user: null },
+    paymentOptionsProps: null,
+    userDetailsProps: null,
     events: { on: noop, off: noop, emit: noop },
     validationFields: { fields: {} },
     selectedStudent: { setStudentId: noop },
@@ -58,15 +60,27 @@ vi.mock('~ui/src/components/Confirm', () => ({ Alert: () => null, Confirm: () =>
 vi.mock('~ui/src/components/SignUpForm', () => ({ SignUpForm: () => null }))
 vi.mock('~ui/src/components/LoginForm', () => ({ LoginForm: () => null }))
 vi.mock('~ui/src/components/AddressDetails', () => ({ AddressDetails: () => null }))
-vi.mock('~ui/src/components/UserDetails', () => ({ UserDetails: () => null }))
-vi.mock('~ui/src/components/PaymentOptions', () => ({ PaymentOptions: () => null }))
+vi.mock('~ui/src/components/UserDetails', () => ({
+  UserDetails: (props) => {
+    mocks.userDetailsProps = props
+    return null
+  }
+}))
+vi.mock('~ui/src/components/PaymentOptions', () => ({
+  PaymentOptions: (props) => {
+    mocks.paymentOptionsProps = props
+    return null
+  }
+}))
 vi.mock('~ui/src/components/PaymentOptionWallet', () => ({ PaymentOptionWallet: () => null }))
 vi.mock('~ui/src/components/DriverTips', () => ({ DriverTips: () => null }))
 vi.mock('~ui/src/components/Cart', () => ({ Cart: () => null }))
 vi.mock('~ui/src/components/PlaceSpot', () => ({ PlaceSpot: () => null }))
 vi.mock('~ui/src/components/OrderContextUI', () => ({ OrderContextUI: () => null }))
 vi.mock('~ui/src/components/BusinessReservation', () => ({ BusinessReservation: () => null }))
-vi.mock('~ui/src/components/Modal', () => ({ Modal: () => null }))
+vi.mock('~ui/src/components/Modal', () => ({
+  Modal: ({ open, children }) => open ? <div data-testid='modal-stub'>{children}</div> : null
+}))
 vi.mock('../OrderDetail', () => ({ OrderDetail: () => null }))
 vi.mock('../../RewardsBanner', () => ({ RewardsBanner: () => null }))
 vi.mock('../../CheckoutStudentDetails', () => ({
@@ -126,6 +140,11 @@ describe('Checkout school gate', () => {
     window.scrollTo = noop
     mocks.cart = null
     mocks.selectedStudentId = null
+    mocks.configState = { configs: {} }
+    mocks.sessionState = { user: { id: 1, name: 'Parent' }, loading: false, auth: true, token: 'tok' }
+    mocks.controllerProps.checkoutFieldsState = { loading: false, fields: [] }
+    mocks.paymentOptionsProps = null
+    mocks.userDetailsProps = null
     mocks.handlerClickPlaceOrder.mockReset()
     window.localStorage.removeItem('user-customer')
   })
@@ -170,5 +189,75 @@ describe('Checkout school gate', () => {
     const button = (await findByText('Place Order')).closest('button')
     expect(button).not.toBeDisabled()
     expect(queryByTestId('student-details-stub')).not.toBeInTheDocument()
+  })
+
+  it('blocks a persisted guest when guest checkout is disabled', async () => {
+    mocks.sessionState = { user: { guest_id: 'guest-1' }, loading: false, auth: true, token: 'tok' }
+    const { findByText, queryByText } = renderCheckout({
+      ...baseCart,
+      business: { ...baseCart.business, vertical: 'food' }
+    })
+
+    expect((await findByText('Place Order')).closest('button')).toBeDisabled()
+    expect(queryByText('Continue as guest')).not.toBeInTheDocument()
+    expect(mocks.paymentOptionsProps.handlePlaceOrder()).toBeUndefined()
+    expect(mocks.handlerClickPlaceOrder).not.toHaveBeenCalled()
+  })
+
+  it('allows an exact configured type and revalidates retained checkout callbacks after revocation', async () => {
+    mocks.sessionState = { user: { guest_id: 'guest-1' }, loading: false, auth: true, token: 'tok' }
+    mocks.configState = {
+      configs: {
+        guest_checkout_enabled: { value: '1' },
+        allowed_order_types_guest_checkout: { value: 'pickup' }
+      }
+    }
+    const { findByText, rerender } = renderCheckout({
+      ...baseCart,
+      business: { ...baseCart.business, vertical: 'food' }
+    })
+    expect(await findByText('Continue as guest')).toBeInTheDocument()
+
+    const retainedPlaceOrder = mocks.paymentOptionsProps.handlePlaceOrder
+    mocks.configState = { configs: {} }
+    rerender(<Checkout cartUuid='cart-1' handleOrderRedirect={noop} handleCheckoutRedirect={noop} />)
+    retainedPlaceOrder()
+
+    expect(mocks.handlerClickPlaceOrder).not.toHaveBeenCalled()
+    expect((await findByText('Place Order')).closest('button')).toBeDisabled()
+  })
+
+  it('blocks a retained guest-details save callback after permission revocation', async () => {
+    mocks.sessionState = { user: { guest_id: 'guest-1' }, loading: false, auth: true, token: 'tok' }
+    mocks.configState = {
+      configs: {
+        guest_checkout_enabled: { value: '1' },
+        allowed_order_types_guest_checkout: { value: 'pickup' }
+      }
+    }
+    mocks.controllerProps.checkoutFieldsState = {
+      loading: false,
+      fields: [{
+        order_type_id: 2,
+        enabled: true,
+        required_with_guest: true,
+        validation_field: { code: 'first_name' }
+      }]
+    }
+    const { findByText, rerender } = renderCheckout({
+      ...baseCart,
+      business: { ...baseCart.business, vertical: 'food' }
+    })
+    fireEvent.click(await findByText('Continue as guest'))
+    await waitFor(() => expect(mocks.paymentOptionsProps.requiredFields).toContain('first_name'))
+    fireEvent.click(await findByText('Place Order'))
+    const retainedGuestHandler = mocks.userDetailsProps.handlePlaceOrderAsGuest
+    expect(retainedGuestHandler).toBeTypeOf('function')
+
+    mocks.configState = { configs: {} }
+    rerender(<Checkout cartUuid='cart-1' handleOrderRedirect={noop} handleCheckoutRedirect={noop} />)
+    retainedGuestHandler()
+
+    expect(mocks.handlerClickPlaceOrder).not.toHaveBeenCalled()
   })
 })

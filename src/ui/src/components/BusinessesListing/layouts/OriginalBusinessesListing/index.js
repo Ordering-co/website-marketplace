@@ -409,7 +409,7 @@ const BusinessesListingUI = (props) => {
 
       {!isCustomerMode && !hideSearchSection && (
         <>
-          <WrapperSearch isCustomLayout={isCustomLayout} isCustomerMode={isCustomerMode}>
+          <WrapperSearch isCustomLayout={isCustomLayout} isCustomerMode={isCustomerMode} $hasMobileSearch={!hideSearch}>
             {!hideSearch && windowSize.width <= 1200 && (
               <SearchRedirectArea>
                 <SearchBar

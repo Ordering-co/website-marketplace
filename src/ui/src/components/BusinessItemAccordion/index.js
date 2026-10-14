@@ -317,7 +317,7 @@ export const BusinessItemAccordion = (props) => {
           </AccordionContent>
           {!isClosed && !isCheckout && (isStickyFooter ? !!isProducts : showButton) && (
             <PriceContainer showUpsellingInBusinessInfo={showUpsellingInBusinessInfo} isStickyFooter={isStickyFooter}>
-              {showUpsellingInBusinessInfo && !isGiftCart && (
+              {showUpsellingInBusinessInfo && !isGiftCart && !isCartPending && (
                 <Button outline color='primary' onClick={() => handleStoreRedirect(business?.slug)}>
                   {t('ADD_MORE_PRODUCTS', 'Add more products')}
                 </Button>

@@ -32,6 +32,28 @@ describe('BusinessItemAccordion', () => {
     expect(getByText(/Checkout/)).toBeInTheDocument()
   })
 
+  it('hides the add more products action for a pending cart', () => {
+    const props = {
+      business: businessFixture,
+      cart: validCart,
+      uuid: 'cart-1',
+      isProducts: true,
+      isForceOpenAccordion: true,
+      isStickyFooter: true,
+      showUpsellingInBusinessInfo: true,
+      total: 12,
+      handleClickCheckout: vi.fn(),
+      handleStoreRedirect: vi.fn()
+    }
+    const active = renderWithProviders(<BusinessItemAccordion {...props} />)
+    expect(active.getByText('Add more products')).toBeInTheDocument()
+    active.unmount()
+
+    const pending = renderWithProviders(<BusinessItemAccordion {...props} isCartPending />)
+    expect(pending.queryByText('Add more products')).not.toBeInTheDocument()
+    expect(pending.getByText(/Checkout/)).toBeInTheDocument()
+  })
+
   it('calls checkout handler', () => {
     const handleClickCheckout = vi.fn()
     const { getByText } = renderWithProviders(

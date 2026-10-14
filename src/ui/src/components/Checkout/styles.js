@@ -282,6 +282,24 @@ export const WarningMessage = styled.div`
   }
 `
 
+export const PendingCartNoticeContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 25px 0;
+
+  p {
+    margin: 0px 60px;
+    text-align: center;
+    font-size: 16px;
+  }
+
+  button {
+    margin-top: 5px;
+  }
+`
+
 export const NotFoundImage = styled.div`
   max-width: 300px;
   transition: all 0.3s ease;
