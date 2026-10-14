@@ -53,6 +53,7 @@ const StripeElementsFormUI = (props) => {
               isSplitForm
               requirements={requirements}
               businessId={businessId}
+              cardsGateway={props.cardsGateway}
               handleCancel={onCancel}
               businessIds={props.businessIds}
             />

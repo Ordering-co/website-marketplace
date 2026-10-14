@@ -10,9 +10,26 @@ const orderMocks = vi.hoisted(() => ({
   state: { options: { type: 1 }, carts: {} },
   actions: { refreshOrderOptions: () => {} }
 }))
+const permissionMocks = vi.hoisted(() => ({
+  config: { configs: {} },
+  session: { user: { id: 1 }, loading: false }
+}))
+const paymentMocks = vi.hoisted(() => ({ props: null }))
 
 vi.mock('~components/contexts/OrderContext', () => ({
   useOrder: () => [orderMocks.state, orderMocks.actions]
+}))
+vi.mock('~components/contexts/ConfigContext', () => ({
+  useConfig: () => [permissionMocks.config]
+}))
+vi.mock('~components/contexts/SessionContext', () => ({
+  useSession: () => [permissionMocks.session, { login: vi.fn() }]
+}))
+vi.mock('~ui/src/components/MultiCartsPaymethodsAndWallets', () => ({
+  MultiCartsPaymethodsAndWallets: (props) => {
+    paymentMocks.props = props
+    return null
+  }
 }))
 
 const verticalMocks = vi.hoisted(() => ({ byBusiness: {} }))
@@ -78,6 +95,9 @@ describe('MultiCheckout', () => {
   beforeEach(() => {
     handleGroupPlaceOrder.mockReset()
     orderMocks.state = { options: { type: 1 }, carts: {} }
+    permissionMocks.config = { configs: {} }
+    permissionMocks.session = { user: { id: 1 }, loading: false }
+    paymentMocks.props = null
     verticalMocks.byBusiness = {}
   })
 
@@ -174,5 +194,39 @@ describe('MultiCheckout', () => {
     )
     expect(getByText('Place Order').closest('button')).not.toBeDisabled()
     expect(queryByText('Please select a student to place the order.')).not.toBeInTheDocument()
+  })
+
+  it('blocks persisted guest checkout when the feature is disabled', () => {
+    permissionMocks.session = { user: { guest_id: 'guest-1' }, loading: false }
+    const { getByText, queryByText } = renderWithProviders(
+      <MultiCheckout cartUuid={foodCart.uuid} openCarts={[foodCart]} />
+    )
+    const button = getByText('Place Order').closest('button')
+    expect(button).toBeDisabled()
+    expect(queryByText('Continue as guest')).not.toBeInTheDocument()
+    fireEvent.click(button)
+    expect(handleGroupPlaceOrder).not.toHaveBeenCalled()
+  })
+
+  it('revalidates a retained multi-checkout payment callback after permission revocation', () => {
+    permissionMocks.session = { user: { guest_id: 'guest-1' }, loading: false }
+    permissionMocks.config = {
+      configs: {
+        guest_checkout_enabled: { value: '1' },
+        allowed_order_types_guest_checkout: { value: 'delivery' }
+      }
+    }
+    const { getByText, rerender } = renderWithProviders(
+      <MultiCheckout cartUuid={foodCart.uuid} openCarts={[foodCart]} />
+    )
+    expect(getByText('Continue as guest')).toBeInTheDocument()
+    const retainedPlaceOrder = paymentMocks.props.handlePlaceOrder
+
+    permissionMocks.config = { configs: {} }
+    rerender(<MultiCheckout cartUuid={foodCart.uuid} openCarts={[foodCart]} />)
+    retainedPlaceOrder()
+
+    expect(handleGroupPlaceOrder).not.toHaveBeenCalled()
+    expect(getByText('Place Order').closest('button')).toBeDisabled()
   })
 })

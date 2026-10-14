@@ -31,6 +31,7 @@ import { PaymentOptionEpayco } from '~ui/src/components/PaymentOptionEpayco'
 import { Icon } from '~ui-icon'
 
 const stripeOptions = ['stripe_direct', 'stripe', 'stripe_connect']
+const stripeCardsMethods = ['stripe', 'stripe_connect_v2']
 const stripeRedirectOptions = [
   { name: 'Bancontact', value: 'bancontact' },
   { name: 'Alipay', value: 'alipay' },
@@ -134,9 +135,9 @@ const PaymentOptionsUI = (props) => {
 
   const list = paymethodsList ? paymethodsList?.paymethods : paymethods?.map(pay => pay.paymethod)
 
-  const popupMethods = ['stripe', 'stripe_direct', 'stripe_connect', 'stripe_redirect', 'paypal', 'square', 'google_pay', 'apple_pay']
+  const popupMethods = ['stripe', 'stripe_direct', 'stripe_connect', 'stripe_connect_v2', 'stripe_redirect', 'paypal', 'square', 'google_pay', 'apple_pay']
 
-  const guestNotSupportedMethods = ['stripe', 'stripe_connect', 'stripe_redirect']
+  const guestNotSupportedMethods = ['stripe', 'stripe_connect', 'stripe_connect_v2', 'stripe_redirect']
 
   const supportedMethods = list
     ?.filter(p => !multiCheckoutMethods.includes(p.gateway))
@@ -144,6 +145,11 @@ const PaymentOptionsUI = (props) => {
     ?.filter(p => useKioskApp ? includeKioskPaymethods.includes(p.gateway) : p)
 
   const paymethodsFieldRequired = ['paypal', 'apple_pay', 'global_apple_pay', 'google_pay']
+
+  const stripeCardsPaymethod = [isOpenMethod?.paymethod, paymethodSelected]
+    .find(paymethod => stripeCardsMethods.includes(paymethod?.gateway))
+  const stripeCardsGateway = stripeCardsPaymethod?.gateway
+  const stripeCardsPublicKey = (stripeCardsPaymethod?.paymethod ?? stripeCardsPaymethod)?.credentials?.publishable
 
   const handlePaymentMethodClick = (paymethod) => {
     if (paymethodsFieldRequired.includes(paymethod?.gateway) &&
@@ -293,12 +299,14 @@ const PaymentOptionsUI = (props) => {
           setErrorCash={props.setErrorCash}
         />
       )}
-      {(isOpenMethod?.paymethod?.gateway === 'stripe' || paymethodSelected?.gateway === 'stripe') && (
+      {stripeCardsGateway && (
         <PaymentOptionStripe
+          key={stripeCardsGateway}
+          gateway={stripeCardsGateway}
           setCardList={setCardList}
           paymethod={isOpenMethod?.paymethod}
           businessId={props.businessId}
-          publicKey={isOpenMethod?.paymethod?.credentials?.publishable}
+          publicKey={stripeCardsPublicKey}
           onPaymentChange={onPaymentChange}
           payType={isOpenMethod?.paymethod?.name}
           onSelectCard={handlePaymethodDataChange}

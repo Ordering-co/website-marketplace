@@ -51,7 +51,7 @@ key,value,app_uses,submodule_uses
 "CANCELLATION_OWNER_TEXT","If you are a :customer let the owner know you midd this website, just write your email below.",1,0
 "PRODUCT","Product",3,0
 "PRODUCT","products",1,0
-"CLOSE","Close",3,0
+"CLOSE","Close",4,0
 "CLOSE","close",1,0
 "PLACE_ORDER","Place Order",4,0
 "PLACE_ORDER","Place order",1,0

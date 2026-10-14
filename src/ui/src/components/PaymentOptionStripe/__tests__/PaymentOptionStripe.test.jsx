@@ -7,7 +7,7 @@ vi.mock('react-loading-skeleton', () => ({
   default: () => <div data-testid='skeleton' />
 }))
 vi.mock('~ui/src/components/StripeElementsForm', () => ({
-  StripeElementsForm: () => <div data-testid='stripe-elements-form' />
+  StripeElementsForm: ({ cardsGateway }) => <div data-testid='stripe-elements-form' data-cards-gateway={cardsGateway} />
 }))
 vi.mock('~ui/src/components/Modal', () => ({
   Modal: ({ open, children }) => (open ? <div>{children}</div> : null)
@@ -40,5 +40,16 @@ describe('PaymentOptionStripe', () => {
   it('renders saved card row', () => {
     const { getByText } = renderWithProviders(<PaymentOptionStripe />)
     expect(getByText(/4242/)).toBeInTheDocument()
+  })
+
+  it('adds a new card through the cards gateway of the controller', () => {
+    const { getByTestId } = renderWithProviders(
+      <PaymentOptionStripe
+        gateway='stripe_connect_v2'
+        cardsGateway='stripe_connect_v2'
+        cardsList={{ loading: false, cards: [] }}
+      />
+    )
+    expect(getByTestId('stripe-elements-form')).toHaveAttribute('data-cards-gateway', 'stripe_connect_v2')
   })
 })

@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
-import { renderWithProviders } from '../../../../../__tests__/helpers/testUtils'
+import { defaultTheme, renderWithProviders } from '../../../../../__tests__/helpers/testUtils'
 import { businessFixture, cartFixture, productFixture } from '../../__tests__/helpers/cartTestMocks'
+import { useConfig } from '~components/contexts/ConfigContext'
+import { useEvent } from '~components/contexts/EventContext'
+import { useOrder } from '~components/contexts/OrderContext'
 import { Cart } from '../index'
 
 vi.mock('~components/contexts/ValidationsFieldsContext', () => ({
@@ -9,7 +12,12 @@ vi.mock('~components/contexts/ValidationsFieldsContext', () => ({
 }))
 
 vi.mock('~ui/src/components/BusinessItemAccordion', () => ({
-  BusinessItemAccordion: ({ children }) => <div data-testid='business-accordion'>{children}</div>
+  BusinessItemAccordion: ({ children, handleClickCheckout, uuid }) => (
+    <div data-testid='business-accordion'>
+      <button type='button' data-testid='accordion-handoff' onClick={() => handleClickCheckout(uuid)} />
+      {children}
+    </div>
+  )
 }))
 vi.mock('~ui/src/components/ProductItemAccordion', () => ({
   ProductItemAccordion: ({ product }) => <div>{product?.name}</div>
@@ -85,6 +93,53 @@ describe('Cart', () => {
     const subtotal = screen.getByText('Subtotal')
     expect(progress.compareDocumentPosition(subtotal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(progress.closest('[data-variant]')).toHaveAttribute('data-variant', 'full')
+  })
+
+  describe('pending cart', () => {
+    const [{ configs }] = useConfig()
+    const [events] = useEvent()
+    const [orderState] = useOrder()
+    const pendingCart = { ...cart, uuid: 'cart-1', valid: true, status: 2 }
+
+    const setup = (carts, pending = pendingCart) => {
+      configs.checkout_multi_business_enabled = { value: '1' }
+      orderState.carts = carts
+      events.emit.mockClear()
+      return renderWithProviders(<Cart cart={pending} isCartPending showUpsellingInBusinessInfo />)
+    }
+
+    afterEach(() => {
+      delete configs.checkout_multi_business_enabled
+      orderState.carts = {}
+    })
+
+    it('sends a pending cart to its own checkout when multi checkout is enabled', () => {
+      setup({ 'businessId:1': pendingCart })
+      fireEvent.click(screen.getByTestId('accordion-handoff'))
+      expect(events.emit).toHaveBeenCalledWith('go_to_page', { page: 'checkout', params: { cartUuid: 'cart-1' } })
+      expect(events.emit).not.toHaveBeenCalledWith('go_to_page', expect.objectContaining({ page: 'multi_checkout' }))
+    })
+
+    it('sends pending carts placed together to their multi checkout', () => {
+      const grouped = { ...pendingCart, group: { uuid: 'group-1' } }
+      setup({
+        'businessId:1': grouped,
+        'businessId:2': { ...grouped, uuid: 'cart-2', business_id: 2 }
+      }, grouped)
+      fireEvent.click(screen.getByTestId('accordion-handoff'))
+      expect(events.emit).toHaveBeenCalledWith('go_to_page', { page: 'multi_checkout', params: { cartUuid: 'group-1' } })
+    })
+
+    it('does not offer to clear a pending cart', () => {
+      setup({ 'businessId:1': pendingCart })
+      expect(screen.queryByText('Clear cart')).not.toBeInTheDocument()
+    })
+  })
+
+  it('offers to clear an active cart from the upselling layout', () => {
+    const theme = { ...defaultTheme, colors: { ...defaultTheme.colors, danger500: '#E63757' } }
+    renderWithProviders(<Cart cart={cart} showUpsellingInBusinessInfo />, { theme })
+    expect(screen.getByText('Clear cart')).toBeInTheDocument()
   })
 
   it('shows unlocked text and preserves the existing checkout action', () => {

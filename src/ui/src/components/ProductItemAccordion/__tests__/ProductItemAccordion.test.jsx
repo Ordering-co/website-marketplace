@@ -28,6 +28,19 @@ describe('ProductItemAccordion', () => {
     expect(getByText('Burger')).toBeInTheDocument()
   })
 
+  it('hides the quantity and delete controls for a pending cart', () => {
+    const editable = renderWithProviders(<ProductItemAccordion />)
+    expect(editable.getByTestId('icon-dashSquareFill')).toBeInTheDocument()
+    expect(editable.getByTestId('icon-plusSquareFill')).toBeInTheDocument()
+    editable.unmount()
+
+    const pending = renderWithProviders(<ProductItemAccordion isCartPending />)
+    expect(pending.queryByTestId('icon-dashSquareFill')).not.toBeInTheDocument()
+    expect(pending.queryByTestId('icon-plusSquareFill')).not.toBeInTheDocument()
+    expect(pending.queryByTestId('icon-trashFilled')).not.toBeInTheDocument()
+    expect(pending.getByText('Burger')).toBeInTheDocument()
+  })
+
   it('calls onEditProduct when edit is triggered', () => {
     onEditProduct.mockClear()
     const { getAllByTestId } = renderWithProviders(<ProductItemAccordion />)

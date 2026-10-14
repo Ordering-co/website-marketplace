@@ -126,6 +126,7 @@ export const PaymentOptionStripeUI = (props) => {
             businessIds={props.businessIds}
             businessId={props.businessId}
             publicKey={props.publicKey}
+            cardsGateway={props.cardsGateway}
             toSave
             requirements={props.clientSecret}
             onCancel={() => setAddCardOpen(false)}

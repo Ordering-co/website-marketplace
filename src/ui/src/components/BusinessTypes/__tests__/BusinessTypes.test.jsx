@@ -61,4 +61,12 @@ describe('BusinessTypes', () => {
     const { getAllByTestId } = renderWithProviders(<BusinessTypes />, { theme: buttonTheme })
     expect(getAllByTestId('skeleton').length).toBeGreaterThan(0)
   })
+
+  it('renders the image carousel alongside the All category', () => {
+    typesState.current.types[1].image = 'https://example.invalid/groceries.png'
+    const { getByText, getByAltText } = renderWithProviders(<BusinessTypes />, { theme: buttonTheme })
+    expect(getByText('All')).toBeInTheDocument()
+    expect(getByAltText('groceries')).toHaveAttribute('src', 'https://example.invalid/groceries.png')
+    expect(getByText('Groceries').closest('.category')).not.toBeNull()
+  })
 })

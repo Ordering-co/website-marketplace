@@ -93,3 +93,28 @@ La sesión principal abrió el clon en `http://100.92.126.87:3005/store/fastbite
 Se guardaron los bytes originales del componente local y se cambió temporalmente el texto a `My clean Marketplace edit`. La sesión principal verificó el cambio visible sin reload manual y capturó [HMR del clon limpio](onboarding-evidence/marketplace-clean-hmr.png); el log propio de Vite registra HMR del componente a las 18:18:00. Ambas imágenes fueron inspeccionadas y conservan el indicador orderingv1.
 
 Tras capturar se restauraron exactamente los bytes originales: comparación byte a byte aprobada, `git status --short` del clon vacío y HEAD1766101 intacto. Vite registra la restauración por HMR a las 18:18:33. Las capturas prueban catálogo/primera edición de este clon público actual; no prueban login, compra, pago, nueva selección browser ni acceso desde laptop. El servidor sigue activo para revisión.
+
+## Revalidación sobre main actualizado y SDK nuevo — 2026-10-14
+
+Estado probado antes de confirmar el merge: HEAD de la sesión `45bbea4ba80e27ec5ee90e48a2293261ec7cae95`, MERGE_HEAD/upstream `b4f7d6672e93fda2175556b93e677652527feeeb`; SDK fijado por ese upstream `e1222c32a8eaeb6999ab1df52cb10dfa844d7888`. Esta corrida corresponde al árbol combinado, con los avances upstream y las correcciones de aislamiento P1/P2; las cifras anteriores describen hitos previos.
+
+Todos los comandos ejecutados con Node24.21.0, corepack pnpm9.15.0; instalación HUSKY=0. No se modificó código fuente, Git ni el SDK durante la revalidación.
+
+| Comprobación actual | Resultado |
+| --- | --- |
+| `HUSKY=0 corepack pnpm install --frozen-lockfile` | ✅ exit0; ya actualizado; lockfile vigente; resolución omitida |
+| `corepack pnpm marketplace:test` | ✅ exit0; 18/18 helper/onboarding |
+| `corepack pnpm lint:check` | ✅ exit0 |
+| `corepack pnpm build` | ✅ exit0; 213 entradas PWA |
+| `corepack pnpm i18n:verify` | ✅ exit0; catálogo completo, 1354 claves |
+| `corepack pnpm i18n:check-generated` | ✅ exit0; catálogo coincide con escaneo |
+| `corepack pnpm test:coverage` | ✅ exit0; 271 archivos, **830/830** tests, 112.05s |
+| `node scripts/coverage-summary.js --no-run --strict` | ✅ exit0; promedio CI **73.42% ≥ 70%** |
+| `corepack pnpm marketplace:doctor` | ✅ exit0; orderingv1 y catálogo público válidos; 1 comercio en consulta mínima |
+| `git diff --check` y `git diff --cached --check` | ✅ exit0 |
+
+Cobertura dentro del alcance configurado: statements83.01%, branches67.52%, functions60.12%, lines83.01%; no prueba toda la aplicación. Logs de esta corrida: `/tmp/sergio-139-merged-install.log`, `/tmp/sergio-139-merged-marketplace-test.log`, `/tmp/sergio-139-merged-lint-check.log`, `/tmp/sergio-139-merged-build.log`, `/tmp/sergio-139-merged-i18n-verify.log`, `/tmp/sergio-139-merged-i18n-check-generated.log`, `/tmp/sergio-139-merged-test-coverage.log`.
+
+Comparación byte a byte con origin/main actual: `src/config.json`, `pnpm-lock.yaml`, ambas licencias y `.gitmodules` coinciden. El nuevo gitlinkSDK es la actualización intencional upstream, no una edición del subagente. `dist/config.json` coincide exactamente con la configuración pública base; no incorpora config.local.json.
+
+La revisión UI/HMR del clon limpio anterior está documentada arriba. El coordinador actualizará ese clon al merge final y realizará su comprobación de navegador posterior; este resultado de pruebas/build no sustituye esa verificación visual. Sin checkout, login, pedidos/pagos ni escrituras de datos remotos.

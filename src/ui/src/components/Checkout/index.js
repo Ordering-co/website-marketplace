@@ -52,8 +52,10 @@ import { isWalletEnabled as isWalletConfigEnabled } from '~components/utils/conf
 import { useConfig } from '~components/contexts/ConfigContext'
 import { useCustomer } from '~components/contexts/CustomerContext'
 import { useEvent } from '~components/contexts/EventContext'
+import { useGuestCheckoutPermission } from '~ui/hooks/useGuestCheckoutPermission'
 
 import { OrderDetail } from './OrderDetail'
+import { PendingCartNotice } from './PendingCartNotice'
 
 import { Modal } from '~ui/src/components/Modal'
 import { useWindowSize } from '~ui/hooks/useWindowSize'
@@ -122,7 +124,10 @@ const CheckoutUI = (props) => {
     braintreeIFrameUrl,
     cybersourceIFrameUrl,
     createBusinessUserPaymethod,
-    deleteBusinessUserPaymethod
+    deleteBusinessUserPaymethod,
+    isPendingCartReleasable,
+    releasingPendingCart,
+    handleReleasePendingCart
   } = props
 
   const theme = useTheme()
@@ -131,6 +136,11 @@ const CheckoutUI = (props) => {
   const [{ parsePrice }] = useUtils()
   const [{ user, loading: userLoading }, { login }] = useSession()
   const [{ configs }] = useConfig()
+  const { guestCheckoutAllowed, guestOrderBlocked, canUseGuestCheckout, canPlaceOrder } = useGuestCheckoutPermission({
+    configs,
+    orderType: options?.type,
+    user
+  })
   const [assignedStudentId, setAssignedStudentId] = useState(null)
   const isSchoolCart = businessDetails?.business?.vertical === 'school' || isSchoolCartCheck(cart)
   const schoolNeedsStudent = doesSchoolCartNeedStudent({
@@ -160,10 +170,17 @@ const CheckoutUI = (props) => {
   const [isSummaryOpen, setIsSummaryOpen] = useState(true)
   const [isPaymentOpen, setIsPaymentOpen] = useState(!cart?.paymethod_id)
   const [confirm, setConfirm] = useState({ open: false, content: null, handleOnAccept: null })
+  const [isPaymentAttemptCancelled, setIsPaymentAttemptCancelled] = useState(false)
 
-  const paymentSelectedName = businessDetails?.business?.paymethods?.find(({ paymethod }) => paymethod?.id === cart?.paymethod_id)?.paymethod?.gateway
-  const cardsMethods = ['stripe', 'credomatic']
-  const stripePaymethods = ['stripe', 'stripe_connect', 'stripe_redirect']
+  useEffect(() => {
+    if (!guestCheckoutAllowed) setAllowedGuest(false)
+  }, [guestCheckoutAllowed])
+
+  const cartPaymethod = businessDetails?.business?.paymethods?.find(({ paymethod }) => paymethod?.id === cart?.paymethod_id)?.paymethod
+  const paymentSelectedName = cartPaymethod?.gateway
+  const cardsMethods = ['stripe', 'stripe_connect_v2', 'credomatic']
+  const stripeCardsMethods = ['stripe', 'stripe_connect_v2']
+  const stripePaymethods = ['stripe', 'stripe_connect', 'stripe_connect_v2', 'stripe_redirect']
   const paymethodsWithoutAutoClose = ['hitpay', 'cash', 'braintree', 'cybersource']
   const businessConfigs = businessDetails?.business?.configs ?? []
   const isTableNumberEnabled = configs?.table_numer_enabled?.value
@@ -188,7 +205,7 @@ const CheckoutUI = (props) => {
   const validateCommentsCartField = (guestCheckoutComment?.enabled && (user?.guest_id ? guestCheckoutComment?.required_with_guest : guestCheckoutComment?.required)) && (cart?.comment === null || cart?.comment?.trim().length === 0)
   const validateDriverTipField = (deliveryTypes.includes(options.type) || allowDriverTipPickup) && (guestCheckoutDriveTip?.enabled && (user?.guest_id ? guestCheckoutDriveTip?.required_with_guest : guestCheckoutDriveTip?.required)) && (Number(cart?.driver_tip) <= 0)
   const validateCouponField = (guestCheckoutCoupon?.enabled && (user?.guest_id ? guestCheckoutCoupon?.required_with_guest : guestCheckoutCoupon?.required)) && !cart?.offers?.some(offer => offer?.type === 2)
-  const validateZipcodeCard = (guestCheckoutZipcode?.enabled && (user?.guest_id ? guestCheckoutZipcode?.required_with_guest : guestCheckoutZipcode?.required)) && paymethodSelected?.gateway === 'stripe' && paymethodSelected?.data?.card && !paymethodSelected?.data?.card?.zipcode
+  const validateZipcodeCard = (guestCheckoutZipcode?.enabled && (user?.guest_id ? guestCheckoutZipcode?.required_with_guest : guestCheckoutZipcode?.required)) && stripeCardsMethods.includes(paymethodSelected?.gateway) && paymethodSelected?.data?.card && !paymethodSelected?.data?.card?.zipcode
   const businessConfig = businessDetails?.business?.configs?.find(config => config?.key === 'reservation_setting')
   const reservationSetting = businessConfig ? JSON.parse(businessConfig?.value || '{}') : JSON.parse(configs?.reservation_setting?.value || '{}')
 
@@ -201,7 +218,7 @@ const CheckoutUI = (props) => {
       : !(paymethodSelected?.data?.card_token && cardList?.cards?.some(card => card?.id === paymethodSelected?.data?.id && card?.card_token === paymethodSelected?.data?.card_token))
   )
 
-  const isDisablePlaceOrderButton = schoolNeedsStudent || !cart?.valid ||
+  const isDisablePlaceOrderButton = schoolNeedsStudent || guestOrderBlocked || !cart?.valid ||
     (!paymethodSelected && cart?.balance > 0) ||
     validateCardRequired ||
     placing ||
@@ -263,8 +280,13 @@ const CheckoutUI = (props) => {
   const showCheckoutRewards = showLoyaltyReward || showCashReward
 
   const handlePlaceOrder = () => {
+    if (!canPlaceOrder()) return
     if (placing) return
     if (schoolNeedsStudent) return
+    if (!user && !canUseGuestCheckout()) {
+      setOpenModal({ ...openModal, signup: true, isGuest: false })
+      return
+    }
     if (stripePaymethods.includes(paymethodSelected?.gateway) && user?.guest_id) {
       setOpenModal({ ...openModal, signup: true, isGuest: true })
       return
@@ -290,10 +312,11 @@ const CheckoutUI = (props) => {
   }
 
   const handleOpenGuestSignup = () => {
-    setOpenModal({ ...openModal, signup: true, isGuest: true })
+    setOpenModal({ ...openModal, signup: true, isGuest: canUseGuestCheckout() })
   }
 
   const handlePlaceOrderAsGuest = () => {
+    if (!canPlaceOrder(true)) return
     if (schoolNeedsStudent) return
     setIsOpen(false)
     const body = {}
@@ -433,6 +456,10 @@ const CheckoutUI = (props) => {
   }
 
   useEffect(() => {
+    if (cart?.status === 2) setIsPaymentAttemptCancelled(false)
+  }, [cart?.status])
+
+  useEffect(() => {
     if (openModal.iframe === false) {
       document.body.style.overflow = ''
     }
@@ -506,14 +533,16 @@ const CheckoutUI = (props) => {
               </OrderContextUIWrapper>
             )}
           </HeaderContent>
-          {!cartState.loading && cart?.status === 2 && (
-            <WarningMessage>
-              <Icon name="warning" />
-              <h1>
-                {t('CART_STATUS_PENDING_MESSAGE', 'Your order is being processed, please wait a little more. if you\'ve been waiting too long, please reload the page')}
-              </h1>
-            </WarningMessage>
-          )}
+          <PendingCartNotice
+            isCartPending={!cartState.loading && cart?.status === 2}
+            placing={placing}
+            paymethodName={cartPaymethod?.gateway && t(cartPaymethod.gateway.toUpperCase(), cartPaymethod?.name)}
+            isPendingCartReleasable={isPendingCartReleasable}
+            releasingPendingCart={releasingPendingCart}
+            handleReleasePendingCart={handleReleasePendingCart}
+            handleOrderRedirect={handleOrderRedirect}
+            onReleased={() => setIsPaymentAttemptCancelled(true)}
+          />
           <h2 className='checkout-title'>{t('CHECKOUT', 'Checkout')}</h2>
           {cart?.business_id && !hideBusinessDetails && (
             <>
@@ -574,7 +603,7 @@ const CheckoutUI = (props) => {
                           <Skeleton height={35} style={{ marginBottom: '10px' }} />
                           <Skeleton height={35} style={{ marginBottom: '10px' }} />
                         </div>)
-                        : ((user?.guest_id && !allowedGuest)
+                        : ((user?.guest_id && (!allowedGuest || !guestCheckoutAllowed))
                             ? (
                             <AuthButtonList>
                               <h2>{t('CUSTOMER_DETAILS', 'Customer details')}</h2>
@@ -584,9 +613,11 @@ const CheckoutUI = (props) => {
                               <Button color='primary' outline onClick={() => setOpenModal({ ...openModal, login: true })}>
                                 {t('LOGIN', 'Login')}
                               </Button>
-                              <Button color='black' outline onClick={() => setAllowedGuest(true)}>
-                                {t('CONTINUE_AS_GUEST', 'Continue as guest')}
-                              </Button>
+                              {guestCheckoutAllowed && (
+                                <Button color='black' outline onClick={() => canUseGuestCheckout() && setAllowedGuest(true)}>
+                                  {t('CONTINUE_AS_GUEST', 'Continue as guest')}
+                                </Button>
+                              )}
                             </AuthButtonList>
                               )
                             : (
@@ -800,7 +831,9 @@ const CheckoutUI = (props) => {
                   <WarningMessage style={{ marginTop: 20 }}>
                     <Icon name="warning" />
                     <h1>
-                      {t('CART_STATUS_CANCEL_MESSAGE', 'The payment has not been successful, please try again')}
+                      {isPaymentAttemptCancelled
+                        ? t('PAYMENT_ATTEMPT_CANCELLED', 'The payment attempt was cancelled. Choose a payment method to try again.')
+                        : t('CART_STATUS_CANCEL_MESSAGE', 'The payment has not been successful, please try again')}
                     </h1>
                   </WarningMessage>
                 )}
@@ -822,7 +855,7 @@ const CheckoutUI = (props) => {
                   isCustomerMode={isCustomerMode}
                   paySelected={paymethodSelected}
                   handlePlaceOrder={handlePlaceOrder}
-                  onPlaceOrderClick={onPlaceOrderClick}
+                  onPlaceOrderClick={(...args) => canPlaceOrder() && onPlaceOrderClick?.(...args)}
                   setCardList={setCardList}
                   requiredFields={requiredFields}
                   openUserModal={setIsOpen}
@@ -1035,6 +1068,11 @@ const CheckoutUI = (props) => {
             {t('INVALID_CART_MOMENT', 'Selected schedule time is invalid, please select a schedule into the business schedule interval.')}
           </WarningText>
         )}
+        {guestOrderBlocked && (
+          <WarningText role='alert'>
+            {t('GUEST_CHECKOUT_DISABLED', 'Guest checkout is not available for this order type.')}
+          </WarningText>
+        )}
       </WrapperRightContainer>
       {windowSize.width < 576 && !cartState.loading && cart && cart?.status !== 2 && (
         <MobileWrapperPlaceOrderButton>
@@ -1107,8 +1145,9 @@ const CheckoutUI = (props) => {
             handlePlaceOrderAsGuest={handlePlaceOrderAsGuest}
             isOrderTypeValidationField
             checkoutFields={checkoutFields}
-            isAllowGuest={paymethodSelected?.gateway === 'cash' || paymethodSelected?.gateway === 'card_delivery'}
+            isAllowGuest={guestCheckoutAllowed && (paymethodSelected?.gateway === 'cash' || paymethodSelected?.gateway === 'card_delivery')}
             onClose={() => {
+              if (!canPlaceOrder()) return
               setIsOpen(false)
               if (paymethodClicked) {
                 setPaymethodClicked({
@@ -1134,7 +1173,7 @@ const CheckoutUI = (props) => {
             useChekoutFileds
             handleSuccessSignup={handleSuccessSignup}
             isPopup
-            isGuest
+            isGuest={openModal.isGuest}
           />
         </Modal>
       )}

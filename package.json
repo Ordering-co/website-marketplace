@@ -1,6 +1,6 @@
 {
   "name": "orderingx-website-marketplace",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "This repository is a template marketplace using functional components.",
   "main": "index.js",
   "private": true,

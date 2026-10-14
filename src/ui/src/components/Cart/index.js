@@ -250,7 +250,13 @@ const CartUI = (props) => {
 
   const handleClickCheckout = (uuid) => {
     const cartsAvailable = Object.values(orderState?.carts)?.filter(cart => cart?.valid && cart?.status !== 2)
-    if (cartsAvailable.length === 1 || !isMultiCheckout || !cart?.business_id) {
+    // A pending cart is left out of cartsAvailable: send it to its own checkout, where its payment is resolved
+    const pendingGroupUuid = cart?.status === 2 && cart?.group?.uuid
+    const isPendingMultiCart = !!pendingGroupUuid &&
+      Object.values(orderState?.carts)?.filter(_cart => _cart?.status === 2 && _cart?.group?.uuid === pendingGroupUuid).length > 1
+    if (isPendingMultiCart) {
+      events.emit('go_to_page', { page: 'multi_checkout', params: { cartUuid: pendingGroupUuid } })
+    } else if (cart?.status === 2 || cartsAvailable.length === 1 || !isMultiCheckout || !cart?.business_id) {
       events.emit('go_to_page', { page: 'checkout', params: { cartUuid: uuid } })
     } else {
       const groupKeys = {}
@@ -904,7 +910,7 @@ const CartUI = (props) => {
                 <p>{t('MISSING_RESERVATION', 'Missing reservation')}: {t('MISSING_RESERVATION_ALERT', 'Please press the reservation button and configure your reservation before to continue')}</p>
               </ReservationAlert>
             )}
-            {showUpsellingInBusinessInfo && (
+            {showUpsellingInBusinessInfo && !isCartPending && (
               <div className='clear-cart'>
                 <Button
                   outline
