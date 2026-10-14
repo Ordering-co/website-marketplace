@@ -53,3 +53,13 @@ El subagente no hizo stage, commit, push, branch ni merge. Git y PR los consolid
 ## Coordinated browser verification — 2026-10-14
 
 Private HTTP preview returned 200. The Codex in-app browser rendered `/store/fastbite` with the selected `orderingv1` project indicator and catalog/menu headings. A temporary presentation edit changed `Local Marketplace preview` to `My first Marketplace edit`; the browser updated without a manual reload and Vite recorded an HMR update for the exact component. Browser error log was empty. The edit was restored byte-for-byte. Screenshots: [before](onboarding-evidence/marketplace-before.png) and [after](onboarding-evidence/marketplace-after.png). This proves the public read-only storefront path; consumer sign-in, checkout, payments, new project-only pairing and laptop access are not measured here.
+
+## Corrección del aislamiento de sesión — 2026-10-14
+
+Se reprodujo el defecto con fixtures locales: pin `selected`, marcador local `selected`, proyecto guardado `foreign` y token de consumidor. La versión anterior daba precedencia al marcador local y aceptaba la sesión; la nueva prueba falló antes del cambio (1 fallo, 5 aprobadas).
+
+La corrección examina ambos identificadores presentes y rechaza un token si cualquiera difiere del proyecto fijado, o si no hay identificador conocido. El rechazo ocurre antes de escribir el marcador local; tokens, proyectos y cachés quedan intactos. El SDK no se modificó.
+
+Después: `corepack pnpm test src/utils/localMarketplaceSession.test.js` exit 0, 6/6. Cubre marcador desactualizado y caso inverso, marcadores compatibles, consumidor anónimo y sesión desconocida/foránea. Las pruebas comparan todo el almacenamiento en los rechazos. `corepack pnpm lint:check`, `corepack pnpm build` y `git diff --check` pasan. Se corrigió un espacio doble detectado por el primer lint y se repitió exitosamente.
+
+Logs actuales: `/tmp/sergio-139-session-before.log`, `/tmp/sergio-139-session-after.log`, `/tmp/sergio-139-session-lint-check.log`, `/tmp/sergio-139-session-build.log`. La cobertura completa anterior describe el hito previo; no se recalculó para esta corrección focalizada. No se probaron tokens reales ni se borró almacenamiento de personas.
