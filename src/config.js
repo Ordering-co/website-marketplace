@@ -1,14 +1,24 @@
 import baseSettings from './config.json'
+import localSettings from 'virtual:marketplace-local-config'
 
 const runtimeOverride = (typeof window !== 'undefined' && window.__CONFIG__) || {}
+
+if (localSettings._local_project_pin && runtimeOverride.project && runtimeOverride.project !== localSettings.project) {
+  throw new Error('Local Marketplace project conflicts with Worker configuration')
+}
 
 const settings = {
   ...baseSettings,
   ...runtimeOverride,
+  ...localSettings,
   api: {
     ...(baseSettings.api || {}),
-    ...(runtimeOverride.api || {})
-  }
+    ...(runtimeOverride.api || {}),
+    ...(localSettings.api || {})
+  },
+  ...(localSettings._local_project_pin
+    ? { socket: { ...(baseSettings.socket || {}), ...(runtimeOverride.socket || {}), ...(localSettings.socket || {}) } }
+    : {})
 }
 
 const keysToNull = [

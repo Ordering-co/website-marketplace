@@ -30,7 +30,13 @@
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:development": "wrangler deploy --env=\"\"",
     "cf:dev": "wrangler dev",
-    "cf:build": "git submodule update --init --recursive && pnpm install --frozen-lockfile && pnpm build"
+    "cf:build": "git submodule update --init --recursive && pnpm install --frozen-lockfile && pnpm build",
+    "marketplace:test": "node --test tests/marketplace/*.test.mjs",
+    "marketplace:start": "node scripts/marketplace/cli.mjs start",
+    "marketplace:restore": "node scripts/marketplace/cli.mjs restore",
+    "marketplace:doctor": "node scripts/marketplace/cli.mjs doctor",
+    "marketplace:configure": "node scripts/marketplace/cli.mjs configure",
+    "marketplace:connection": "node scripts/marketplace/cli.mjs connection"
   },
   "engines": {
     "node": ">=24.0.0",

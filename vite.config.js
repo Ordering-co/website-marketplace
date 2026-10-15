@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
+import { localMarketplaceConfig } from './scripts/marketplace/local-config-plugin.mjs'
 import { readFileSync, copyFileSync } from 'node:fs'
 import { buildPwaPluginOptions } from './src/utils/pwaPluginOptions.js'
 
@@ -42,6 +43,7 @@ const copyConfigToDist = () => ({
 const createConfig = base => ({
   base,
   plugins: [
+    localMarketplaceConfig(),
     react({
       babel: {
         plugins: [

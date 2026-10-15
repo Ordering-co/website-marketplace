@@ -1,10 +1,14 @@
 import './shims/network-boot'
+import settings from './config'
+import { verifyLocalMarketplaceSession } from './utils/localMarketplaceSession'
+import { LocalMarketplacePreview } from './components/LocalMarketplacePreview'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import smoothscroll from 'smoothscroll-polyfill'
 
 import './index.css'
 import reportWebVitals from './reportWebVitals'
+
 import { Router } from './router'
 import theme from './theme.json'
 
@@ -113,6 +117,13 @@ import unionpay from './assets/images/unionpay.svg'
 import visa from './assets/images/visa.webp'
 import giftCard from './assets/images/gift-card.webp'
 import noTransactionsIcon from './assets/images/no-transactions.webp'
+
+try {
+  verifyLocalMarketplaceSession(settings, window.localStorage)
+} catch (error) {
+  document.getElementById('root').textContent = error.message
+  throw error
+}
 
 const logos = {
   logotype,
@@ -228,6 +239,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'))
 root.render(
   <ThemeProvider theme={theme}>
     <CookieConsentProvider>
+      <LocalMarketplacePreview />
       <SubdomainComponent>
         <OrderingProvider Alert={Alert} initialOptimizationLoad={initialFirstLoad}>
           <CheckoutFieldsProvider>

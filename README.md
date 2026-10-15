@@ -1,5 +1,21 @@
 # Ordering Marketplace
 
+## Quickstart
+
+Paste this prompt into your AI agent:
+
+```text
+Get https://github.com/Ordering-co/website-marketplace.git, preserving any existing checkout. Read setup.md and follow it to use my confirmed Ordering project, configure and start Website Marketplace, verify its catalog and make a first visible local edit. Preserve my changes and never copy privileged credentials.
+```
+
+1. Paste the prompt and let the agent prepare the checkout.
+2. Confirm the detected project. Sign in only when a compatible project-selection flow is available.
+3. Open the local URL and check the selected project, catalog and first visible edit.
+
+The agent prefers an existing Ordering connection. If browser selection is unavailable, it explains the explicit public-project fallback; public API validation does not establish membership. Reuse any existing checkout. The prompt obtains the public distribution only when a checkout is absent; existing instructions remain below.
+
+See [setup.md](setup.md), [configuration](docs/marketplace-configuration.md), [first edit](docs/marketplace-first-edit.md) and [troubleshooting](docs/marketplace-troubleshooting.md). Existing development and deployment instructions remain below.
+
 React 18 storefront using Vite, styled-components and the Ordering API. Browse businesses, products, checkout and order tracking.
 
 ## Setup
