@@ -1,7 +1,7 @@
 # Website Marketplace setup runbook for an AI agent
 
 ```text
-Get https://github.com/Ordering-co/website-marketplace.git, preserving any existing checkout. Read setup.md and follow it to use my confirmed Ordering project, configure and start Website Marketplace, verify its catalog and make a first visible local edit. Preserve my changes and never copy privileged credentials.
+Get https://github.com/Ordering-co/website-marketplace.git, reusing any existing checkout. Read setup.md and follow it to connect my confirmed Ordering project, start the marketplace, and show one simple visible edit. Preserve my changes.
 ```
 
 ## Rules that apply before any sign-in
@@ -91,16 +91,186 @@ Open a fresh consumer profile. Confirm the selected project label, effective API
 
 Follow docs/marketplace-first-edit.md, verify Fast Refresh and the unchanged project. Edit presentation only, not src/@/components. Report separately: detected/authenticated project choice, validated public config, and running Website. A public config check is not proof of developer authentication; report whether identity came from native MCP, capability-checked browser selection, or remains unverified in the explicit public fallback. See the included reference, troubleshooting and prompts.
 
-## Manual configuration and deployment reference
+## Manual setup
 
-Local agent setup uses ignored src/config.local.json; it does not replace the public base configuration or configure deployment. Preserve the following distribution-specific instructions.
+Local agent setup uses ignored src/config.local.json; it preserves the public base configuration and does not configure deployment. The manual alternative below requires no administrative key. Deployment is a separate explicitly authorized operation.
 
 Set `project` in `src/config.json` to your own Ordering project. The API URL, version and language and socket configuration must match your backend. Keep feature flags appropriate to your project. Store identifiers in the template are public integration identifiers; configure your own stores before release. Configure your own dashboard URL, support email and observability services. Never put privileged API credentials in browser code.
 
-`.env.example` lists local Vite settings; values exposed by Vite are public browser configuration. Google Maps requires your own restricted browser key when enabled. Backend project settings control authentication, payments, analytics, notifications and franchise/business availability. Test these integrations only against a project you control.
+If `.env.example` is supplied, use it only when `.env` does not already exist; preserve existing environment settings. Values exposed by Vite are public browser configuration. Google Maps requires your own restricted browser key when enabled. Backend project settings control authentication, payments, analytics, notifications and franchise/business availability. Test these integrations only against a project you control.
 
-For Cloudflare, choose your own account and worker names in `wrangler.toml`, set the project and asset URL for each environment and supply account credentials through your local environment or deployment platform. `pnpm cf:dev` starts the worker locally; deployment scripts publish to the configured account and environment. Review configuration before using them. Docker requires the submodule to be initialized before building; use `docker compose up --build` for development.
+### Requirements
 
-Run `pnpm build`, `pnpm lint:check`, `pnpm i18n:verify`, `pnpm i18n:check-generated`, `pnpm test:coverage` and `node scripts/coverage-summary.js --no-run --strict`. Coverage is scoped by the test configuration; it does not represent every source file. A successful bundle or HTTP preview verifies asset delivery, not backend tenant behavior, checkout, payments or notifications.
+Use the available pinned runtime. The Corepack activation command below is a manual fallback; do not change package-manager defaults automatically in an existing environment.
+
+> Having installed:
+> 1. Node.js 24
+> 2. Git (version 2.30 or higher)
+> 3. pnpm 9.15.0 — `corepack enable && corepack prepare pnpm@9.15.0 --activate`
+
+### Option 1: Clone repository and run with pnpm
+
+1. Open your terminal
+2. Clone repository writing:
+```
+git clone --recursive https://github.com/Ordering-co/website-marketplace.git
+```
+3. Enter the downloaded repository folder
+```
+cd website-marketplace
+```
+4. To install dependencies run
+```
+HUSKY=0 corepack pnpm install --frozen-lockfile
+```
+
+If a blank environment template is supplied and no environment file exists, initialize it without overwriting your settings:
+
+```sh
+if [ ! -e .env ] && [ -f .env.example ]; then
+  cp .env.example .env
+fi
+```
+
+5. To start the development server run
+```
+pnpm start
+```
+
+### Expose the dev server via an HTTPS tunnel (Cloudflare)
+
+Public tunnels expose the preview. Use them only when explicitly requested and authorized; prefer private Tailscale access for local device testing.
+
+Sometimes you need to open the local dev server on a public HTTPS URL — to test on a phone, share a preview, or run flows that require `https`. The dev server supports this through an **opt-in** `VITE_TUNNEL` flag, so the default `pnpm start` (plain `localhost`) is never affected.
+
+1. Install `cloudflared` (one-time):
+```
+brew install cloudflared
+```
+2. Start the dev server in tunnel mode (enables `host`, tunnel `allowedHosts`, and HMR over port 443):
+```
+VITE_TUNNEL=true pnpm start
+```
+3. In a second terminal, open a Cloudflare quick tunnel to the dev server:
+```
+cloudflared tunnel --url http://localhost:3000
+```
+4. `cloudflared` prints a public `https://<random>.trycloudflare.com` URL. Open it in any browser — hot reload (HMR) works over the tunnel.
+
+Notes:
+- Without `VITE_TUNNEL=true`, the tunnel-specific settings stay off and normal `localhost` HMR works as usual — do **not** set the flag for regular local development.
+- Quick tunnels are ephemeral: a new URL is generated on each `cloudflared` run and there is no uptime guarantee. For a stable URL, use a [named tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps).
+- VS Code Dev Tunnels (`*.devtunnels.ms`) are also allowed in tunnel mode.
+
+### Option 2: Clone repository and run with Docker
+> "You need to have Docker previously installed. You can install it from [here](https://docs.docker.com/engine/install/)"
+
+1. Ensure Docker is opened.
+2. Open your terminal.
+3. Clone repository writing:
+```
+git clone --recursive https://github.com/Ordering-co/website-marketplace.git
+```
+4. Enter the downloaded repository folder
+```
+cd website-marketplace
+```
+5. Run
+```
+docker-compose up
+```
+6. Open `localhost:3000` in your browser
+
+### Docker troubleshooting
+
+- If you can't get the server with `0.0.0.0:3000` you can use `localhost:3000` instead.
+- If you have troubles with Docker, and it’s not running when you run `docker-compose` up https://d.pr/v/J1G6Sk, you can try Quit docker or Restart Docker  https://d.pr/i/eKntOb. Open Docker again, and run `docker-compose up`.
+- FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+Check your CPU and memory settings in Docker. Go to Docker `Desktop/Preferences` or `Settings/Resources` Increase the memory and CPU limit (keep in mind that this may affect your computer's performance, so make sure your computer has the capabilities to handle it without getting overwhelmed and don't set a limit higher than what your computer can support).
+
+### Format code
+
+Run `pnpm lint` to execute the linter.
+
+### Deploy to Cloudflare Workers
+
+This storefront can be hosted as a SPA on Cloudflare Workers using static assets. Choose your own account, worker names, project and asset URLs in `wrangler.toml` for each environment, and supply account credentials through your local environment or deployment platform. Review the configuration before using deployment scripts.
+
+**Repository:** [Ordering-co/website-marketplace](https://github.com/Ordering-co/website-marketplace)
+
+1. Build the app (includes the `src/@/components` submodule):
+```
+pnpm cf:build
+```
+2. Preview locally with Wrangler:
+```
+pnpm cf:dev
+```
+3. Deploy to staging:
+```
+pnpm deploy:staging
+```
+4. Deploy to your configured production worker:
+```
+pnpm deploy:production
+```
+
+#### Cloudflare Workers Builds settings
+
+| Setting | Value |
+|--------|--------|
+| **Build command** | `pnpm cf:build` |
+| **Deploy command** | `pnpm deploy:production` (prod) or `pnpm deploy:staging` |
+| **Root directory** | `/` |
+
+**Build environment variables** (Settings → Build variables and secrets):
+
+- `NODE_VERSION=24`
+- `HUSKY=0` (skip git hooks in CI)
+- The generic `.env.example` template and `wrangler.toml` use `ASSET_BASE_URL=/`; preserve your own `.env`. Configure the Vite asset base for your hosting environment explicitly.
+- For a CDN or subpath deployment, update `ASSET_BASE_URL` to the same value in `.env` and every applicable `wrangler.toml` environment. A Cloudflare build variable with that name can override the tracked build default.
+
+Use worker names belonging to your own account and review routes and custom domains before deploying.
+
+**Do not use `pnpm deploy` in Cloudflare** — that invokes pnpm's built-in workspace deploy, not this app. Use `pnpm deploy:production` instead.
+
+### Apache deployment (legacy)
+
+The file `public/.htaccess` is kept **only** to allow building and deploying this project to a traditional Apache server (cPanel/shared hosting). It is **ignored by Cloudflare Workers**, where SEO and routing are handled by `worker/index.js`.
+
+If you deploy to Apache, you also need to provide a `seohelper.php` file alongside the build output, since `.htaccess` references it for SEO bot redirection. That file is not part of this repository anymore.
+
+Do **not** rely on `.htaccess` rules when running on Cloudflare — all rewrites, SEO injection, and caching live in the Worker
+
+Legacy demo reference: earlier instructions describe demosv5 as resetting every two hours. Confirm current demo behavior and never treat demo data as persistent project configuration.
+
+## Validation and translations
+
+```sh
+pnpm build
+pnpm preview
+pnpm lint:check
+pnpm i18n:verify
+pnpm i18n:check-generated
+pnpm test
+pnpm test:coverage
+node scripts/coverage-summary.js --no-run --strict
+```
+
+Coverage is scoped by the test configuration; it does not represent every source file. A successful bundle or HTTP preview verifies asset delivery, not backend tenant behavior, checkout, payments or notifications.
 
 Translations are managed in `i18n/translations.json`. New keys need real literal fallbacks, entries in each locale and refreshed generated files with `pnpm i18n:generate`. Retain existing translations. See `i18n/README.md` for catalog operations.
+
+## Development reference
+
+This React 18 storefront uses functional components, Vite, styled-components and the Ordering API to browse businesses, products, checkout and order tracking. The shared commerce controllers and SDK are a pinned Git submodule from [Finitless-com/ordering-components](https://github.com/Finitless-com/ordering-components); initialize it before installation and keep its selected revision.
+
+- `src/pages/`: storefront routes.
+- `src/ui/`: presentation and local components.
+- `src/@/components/`: shared controllers, contexts and SDK submodule.
+- `worker/`: SPA delivery, SEO and runtime configuration.
+- `i18n/`: translation catalog and generators.
+
+Change local presentation in this repository; shared SDK changes belong in its own repository. Keep translation fallbacks and existing locale values when updating copy. See [CLAUDE.md](CLAUDE.md) for the controller/UI boundaries and deep-import rules.
+
+Development and preview default to port 3000; the local onboarding launcher chooses an available port. Build output is `dist/`. Configure your own project and integrations before using the storefront; runtime functionality requires the corresponding backend services and project permissions.

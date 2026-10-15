@@ -3,7 +3,7 @@
 ## Connect and start
 
 ```text
-Get https://github.com/Ordering-co/website-marketplace.git, preserving any existing checkout. Read setup.md and follow it to use my confirmed Ordering project, configure and start Website Marketplace, verify its catalog and make a first visible local edit. Preserve my changes and never copy privileged credentials.
+Get https://github.com/Ordering-co/website-marketplace.git, reusing any existing checkout. Read setup.md and follow it to connect my confirmed Ordering project, start the marketplace, and show one simple visible edit. Preserve my changes.
 ```
 
 ## Diagnose
