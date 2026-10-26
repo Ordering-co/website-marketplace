@@ -19,6 +19,7 @@ import {
   DeliveryFeeStrikethrough,
   DeliveryFeeFreeLabel,
   NoValidProductMessage,
+  InvalidCartMessage,
   DriverTipContainer,
   SpinnerCart,
   ReservationAlert,
@@ -158,6 +159,14 @@ const CartUI = (props) => {
   const cateringValues = businessConfigs && getCateringValues(cateringTypeString, businessConfigs)
   const extraValueMetafields = cart?.metafields?.filter?.(meta => meta?.key?.startsWith('extra_value_')) || []
   const hasNoReservation = !cart?.reservation && orderState?.options?.type === 9
+  const isInvalidCart = cart?.valid === false && !isCartPending
+  const invalidCartReasons = isInvalidCart && !isCheckout
+    ? [
+        cart?.valid_schedule === false && t('ERROR_ADD_PRODUCT_BUSINESS_CLOSED', 'The business is closed at the moment'),
+        cart?.valid_schedule !== false && cart?.valid_preorder === false && t('INVALID_CART_MOMENT', 'Selected schedule time is invalid, please select a schedule into the business schedule interval.'),
+        cart?.valid_address === false && t('INVALID_CART_ADDRESS', 'Selected address is invalid, please select a closer address.')
+      ].filter(Boolean)
+    : []
 
   const getIncludedTaxes = (isDeliveryFee) => {
     if (cart?.taxes === null) {
@@ -393,7 +402,7 @@ const CartUI = (props) => {
             isStore={isStore}
             total={cart?.total}
             handleClickCheckout={handleClickCheckout}
-            checkoutButtonDisabled={(openUpselling && !canOpenUpselling) || !cart?.valid_maximum || (!cart?.valid_minimum && !(cart?.discount_type === 1 && cart?.discount_rate === 100)) || !cart?.valid_address || hasNoReservation}
+            checkoutButtonDisabled={(openUpselling && !canOpenUpselling) || isInvalidCart || !cart?.valid_maximum || (!cart?.valid_minimum && !(cart?.discount_type === 1 && cart?.discount_rate === 100)) || !cart?.valid_address || hasNoReservation}
             setPreorderBusiness={setPreorderBusiness}
             handleChangeStore={!useKioskApp && handleChangeStore}
             isMultiCheckout={isMultiCheckout}
@@ -429,6 +438,11 @@ const CartUI = (props) => {
                 {t('REMOVE_NOT_AVAILABLE_CART_PRODUCTS', 'To continue with your checkout, please remove from your cart the products that are not available.')}
               </NoValidProductMessage>
             )}
+            {invalidCartReasons.map(reason => (
+              <InvalidCartMessage key={reason} data-doc-section='cart-invalid-reason'>
+                {reason}
+              </InvalidCartMessage>
+            ))}
             {freeDeliveryProgress && (
               <FreeDeliveryProgress {...freeDeliveryProgress} variant='full' />
             )}

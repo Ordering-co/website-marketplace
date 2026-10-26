@@ -606,7 +606,7 @@ const CheckoutUI = (props) => {
                         : ((user?.guest_id && (!allowedGuest || !guestCheckoutAllowed))
                             ? (
                             <AuthButtonList>
-                              <h2>{t('CUSTOMER_DETAILS', 'Customer details')}</h2>
+                              <h2>{t('CUSTOMER_DETAILS', 'Customer Details')}</h2>
                               <Button color='primary' onClick={() => setOpenModal({ ...openModal, signup: true })}>
                                 {t('SIGN_UP', 'Sign up')}
                               </Button>

@@ -3,6 +3,8 @@ import { Helmet } from 'react-helmet'
 import { useTheme } from 'styled-components'
 import helmetData from '../../helmetdata.json'
 import { useConfig } from '~components/contexts/ConfigContext'
+import { useSite } from '~components/contexts/SiteContext'
+import { DEFAULT_SEO_DESCRIPTION, resolveSeoDescription } from '../../utils/seoDescription'
 import { useCookieConsent } from '../../contexts/CookieConsentContext'
 
 const orderingSubdomains = ['tryordering.com', 'ordering.co', 'orderingplus.com']
@@ -19,6 +21,7 @@ export const HelmetTags = (props) => {
 
   const theme = useTheme()
   const [configs] = useConfig()
+  const [{ site }] = useSite()
   const { hasConsented } = useCookieConsent()
   const enabledPoweredByOrdering = (typeof window !== 'undefined' ? window.__CONFIG__?.disable_powered_by : undefined) !== undefined
     ? !window.__CONFIG__.disable_powered_by
@@ -69,24 +72,46 @@ export const HelmetTags = (props) => {
   })()
 
   const siteName = theme?.my_products?.components?.website_settings?.components?.values?.name
-  const siteDescription = theme?.my_products?.components?.website_settings?.components?.values?.description
+  const siteDescription = resolveSeoDescription(
+    site?.description,
+    theme?.my_products?.components?.website_settings?.components?.values?.description
+  )
+  const effectiveDescription = resolveSeoDescription(
+    props.helmetMetaTags?.description,
+    seoInjected?.description,
+    siteDescription,
+    seoInjected?.ogDescription,
+    metaTag?.description
+  ) || DEFAULT_SEO_DESCRIPTION
+  // Page meta loads only a normal description (onChangeMetaTag); it must not
+  // displace a valid injected OG. An explicit page ogDescription still wins.
+  const effectiveOgDescription = resolveSeoDescription(
+    props.helmetMetaTags?.ogDescription,
+    seoInjected?.ogDescription,
+    effectiveDescription
+  ) || DEFAULT_SEO_DESCRIPTION
   const themeReady = !!siteName
   const canRenderTitle = !!page && themeReady
   const effectiveSeoTitle = seoInjected?.title && seoInjected.title !== siteName ? seoInjected.title : null
   const titleTemplate = !canRenderTitle || (effectiveSeoTitle && !props.helmetMetaTags?.title)
     ? ''
     : `${siteName} - %s`
+  // Customer-host robots are page-owned: the global instance must not reset a
+  // page's noindex when it mounts later. Provider hosts keep the safeguard.
   const robotsContent = isOrderingHost()
     ? 'noindex, nofollow'
-    : (props.robots || metaTag?.robots)
+    : (page ? (props.robots || metaTag?.robots) : null)
 
   return (
     <Helmet titleTemplate={titleTemplate}>
       {canRenderTitle && (
         <title id={`route-${page}`}>{props.helmetMetaTags?.title || effectiveSeoTitle || metaTag.title} {enabledPoweredByOrdering ? '- Powered by Orderingplus' : ''}</title>
       )}
-      {canRenderTitle && (
-        <meta name='description' content={(props.helmetMetaTags?.description || seoInjected?.description || siteDescription || metaTag.description) + (enabledPoweredByOrdering ? ' Powered by Orderingplus' : '')} />
+      {page && effectiveDescription && (
+        <meta name='description' content={effectiveDescription} />
+      )}
+      {page && effectiveOgDescription && (
+        <meta property='og:description' content={effectiveOgDescription} />
       )}
       <meta name='keywords' content={props.helmetMetaTags?.keywords || metaTag.keywords} />
       {robotsContent && <meta name='robots' content={robotsContent} />}

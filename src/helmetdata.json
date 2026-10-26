@@ -208,5 +208,12 @@
     "keywords": "order, tracking, delivery",
     "robots": "noindex, nofollow",
     "canonicalUrl": ""
+  },
+  "page_not_found": {
+    "title": "Page not found",
+    "description": "",
+    "keywords": "",
+    "robots": "noindex, nofollow",
+    "canonicalUrl": ""
   }
 }

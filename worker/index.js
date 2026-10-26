@@ -130,7 +130,7 @@ const removedMetasHandler = {
   }
 }
 
-const buildInjectionHandler = (seoData, firstLoad, runtimeConfig, pageSpecificSeo, geo, bootI18n, shouldNoindex) => ({
+const buildInjectionHandler = (seoData, firstLoad, runtimeConfig, injectedSeo, geo, bootI18n, shouldNoindex) => ({
   element (element) {
     if (shouldNoindex) {
       element.append('<meta name="robots" content="noindex, nofollow">', { html: true })
@@ -156,8 +156,8 @@ const buildInjectionHandler = (seoData, firstLoad, runtimeConfig, pageSpecificSe
       element.append(`<script>window.__EDGE_XHR__ = ${payload};</script>`, { html: true })
     }
 
-    if (pageSpecificSeo) {
-      const payload = escapeJsonForScript(pageSpecificSeo)
+    if (injectedSeo) {
+      const payload = escapeJsonForScript(injectedSeo)
       element.append(`<script>window.__SEO__ = ${payload};</script>`, { html: true })
     }
 
@@ -166,9 +166,13 @@ const buildInjectionHandler = (seoData, firstLoad, runtimeConfig, pageSpecificSe
         if (!meta || typeof meta.content === 'undefined' || meta.content === null) continue
         const content = String(meta.content)
         if (meta.name && meta.name !== 'title') {
-          element.append(`<meta name="${escapeAttr(meta.name)}" content="${escapeAttr(content)}">`, { html: true })
+          // Only the description tags are marked as Helmet-managed so React
+          // adopts them on mount instead of appending duplicates.
+          const managed = meta.name === 'description' ? ' data-react-helmet="true"' : ''
+          element.append(`<meta name="${escapeAttr(meta.name)}" content="${escapeAttr(content)}"${managed}>`, { html: true })
         } else if (meta.property) {
-          element.append(`<meta property="${escapeAttr(meta.property)}" content="${escapeAttr(content)}">`, { html: true })
+          const managed = meta.property === 'og:description' ? ' data-react-helmet="true"' : ''
+          element.append(`<meta property="${escapeAttr(meta.property)}" content="${escapeAttr(content)}"${managed}>`, { html: true })
         }
       }
     }
@@ -342,19 +346,19 @@ export default {
     const siteName = processedFirstLoad?.theme?.my_products?.components?.website_settings?.components?.values?.name
     const pageSpecificTitle = seoPath !== '/seo/general' && seoTitle && seoTitle !== siteName ? seoTitle : null
 
-    const siteFallback = buildSiteSeoFallback(processedFirstLoad?.site, request.url)
+    const siteFallback = buildSiteSeoFallback(processedFirstLoad?.site, request.url, processedFirstLoad?.theme)
     const mergedSeo = mergeSeoData(seoData, siteFallback, {
       preferSite: seoPath === '/seo/general',
       site: processedFirstLoad?.site
     })
     const newTitle = mergedSeo.title
-    const pageSpecificDescription = seoPath !== '/seo/general'
-      ? mergedSeo.metas.find(meta => meta?.name === 'description')?.content
-      : null
-    const pageSpecificSeo = pageSpecificTitle || pageSpecificDescription
+    const mergedDescription = mergedSeo.metas.find(meta => meta?.name === 'description')?.content ?? null
+    const mergedOgDescription = mergedSeo.metas.find(meta => meta?.property === 'og:description')?.content ?? null
+    const injectedSeo = pageSpecificTitle || mergedDescription || mergedOgDescription
       ? {
           title: pageSpecificTitle,
-          description: pageSpecificDescription,
+          description: mergedDescription,
+          ogDescription: mergedOgDescription,
           pathname: url.pathname
         }
       : null
@@ -403,7 +407,7 @@ export default {
       .on('meta[property^="og:"]', removedMetasHandler)
       .on('meta[name^="og:"]', removedMetasHandler)
       .on('meta[name^="twitter:"]', removedMetasHandler)
-      .on('head', buildInjectionHandler(enrichedSeoData, processedFirstLoad, runtimeConfig, pageSpecificSeo, { country_code: request.cf?.country || null }, bootI18n, shouldNoindex))
+      .on('head', buildInjectionHandler(enrichedSeoData, processedFirstLoad, runtimeConfig, injectedSeo, { country_code: request.cf?.country || null }, bootI18n, shouldNoindex))
 
     if (shouldNoindex) {
       rewriter.on('meta[name="robots"]', removedMetasHandler)

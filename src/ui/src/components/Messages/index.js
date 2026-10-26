@@ -94,10 +94,10 @@ const MessagesUI = (props) => {
 
   const showBusinessAndDriver = false
   const quickMessageList = [
-    { key: 'message_1', text: t('CUSTOMER_MESSAGE_1', 'Lorem ipsum 1') },
-    { key: 'message_2', text: t('CUSTOMER_MESSAGE_2', 'Lorem ipsum 2') },
-    { key: 'message_3', text: t('CUSTOMER_MESSAGE_3', 'Lorem ipsum 3') },
-    { key: 'message_4', text: t('CUSTOMER_MESSAGE_4', 'Lorem ipsum 4') }
+    { key: 'message_1', text: t('CUSTOMER_MESSAGE_1', 'Is my order on its way?') },
+    { key: 'message_2', text: t('CUSTOMER_MESSAGE_2', 'Please call me when you arrive') },
+    { key: 'message_3', text: t('CUSTOMER_MESSAGE_3', 'Please leave the order at the door') },
+    { key: 'message_4', text: t('CUSTOMER_MESSAGE_4', 'Thank you!') }
   ]
 
   const handleClickQuickMessage = (index) => {

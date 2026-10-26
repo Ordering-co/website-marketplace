@@ -124,7 +124,10 @@ const createConfig = base => ({
     'process.env': {},
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
     'process.env.PUBLIC_URL': JSON.stringify(''),
-    'process.env.npm_package_version': JSON.stringify(pkg.version)
+    'process.env.npm_package_version': JSON.stringify(pkg.version),
+    'import.meta.env.VITE_SENTRY_RELEASE': JSON.stringify(
+      process.env.WORKERS_CI_BRANCH === 'production' ? process.env.WORKERS_CI_COMMIT_SHA || '' : ''
+    )
   },
   test: {
     globals: true,

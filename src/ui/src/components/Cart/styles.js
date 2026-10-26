@@ -398,6 +398,11 @@ export const NoValidProductMessage = styled.p`
   font-size: 14px;
 `
 
+export const InvalidCartMessage = styled.p`
+  font-size: 14px;
+  color: ${props => props.theme?.colors?.danger500};
+`
+
 export const DriverTipContainer = styled.div`
   width: 100%;
   display: flex;

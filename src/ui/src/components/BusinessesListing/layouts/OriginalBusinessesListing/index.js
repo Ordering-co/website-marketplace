@@ -766,27 +766,27 @@ export const OriginalBusinessesListing = (props) => {
       {
         value: 1,
         text: t('DELIVERY', 'Delivery'),
-        description: t('ORDERTYPE_DESCRIPTION_DELIVERY', 'Delivery description')
+        description: t('ORDERTYPE_DESCRIPTION_DELIVERY', 'We bring your order to your door')
       },
       {
         value: 2,
         text: t('PICKUP', 'Pickup'),
-        description: t('ORDERTYPE_DESCRIPTION_PICKUP', 'Pickup description')
+        description: t('ORDERTYPE_DESCRIPTION_PICKUP', 'Order ahead and pick it up at the store')
       },
       {
         value: 3,
         text: t('EAT_IN', 'Eat in'),
-        description: t('ORDERTYPE_DESCRIPTION_EATIN', 'Eat in description')
+        description: t('ORDERTYPE_DESCRIPTION_EATIN', 'Order ahead and enjoy it at the restaurant')
       },
       {
         value: 4,
         text: t('CURBSIDE', 'Curbside'),
-        description: t('ORDERTYPE_DESCRIPTION_CURBSIDE', 'Curbside description')
+        description: t('ORDERTYPE_DESCRIPTION_CURBSIDE', 'We bring your order out to your car')
       },
       {
         value: 5,
         text: t('DRIVE_THRU', 'Drive thru'),
-        description: t('ORDERTYPE_DESCRIPTION_DRIVETHRU', 'Drive Thru description')
+        description: t('ORDERTYPE_DESCRIPTION_DRIVETHRU', 'Pick up your order without leaving your car')
       }
     ]
   }

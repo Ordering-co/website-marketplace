@@ -12,9 +12,9 @@ vi.mock('~components/contexts/ValidationsFieldsContext', () => ({
 }))
 
 vi.mock('~ui/src/components/BusinessItemAccordion', () => ({
-  BusinessItemAccordion: ({ children, handleClickCheckout, uuid }) => (
+  BusinessItemAccordion: ({ children, handleClickCheckout, uuid, checkoutButtonDisabled }) => (
     <div data-testid='business-accordion'>
-      <button type='button' data-testid='accordion-handoff' onClick={() => handleClickCheckout(uuid)} />
+      <button type='button' data-testid='accordion-handoff' disabled={checkoutButtonDisabled} onClick={() => handleClickCheckout(uuid)} />
       {children}
     </div>
   )
@@ -155,5 +155,48 @@ describe('Cart', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Free delivery unlocked')
     fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
     expect(onClickCheckout).toHaveBeenCalledTimes(1)
+  })
+
+  describe('invalid cart', () => {
+    const momentMessage = 'Selected schedule time is invalid, please select a schedule into the business schedule interval.'
+    const closedMessage = 'The business is closed at the moment'
+    const addressMessage = 'Selected address is invalid, please select a closer address.'
+    const invalidPreorderCart = { ...cart, valid: false, valid_preorder: false, products: [{ code: 'FISH-1', name: 'Fish Over Rice Platter' }] }
+
+    it('keeps the products visible, explains the reason and blocks checkout', () => {
+      renderWithProviders(<Cart cart={invalidPreorderCart} />)
+      expect(screen.getByText('Fish Over Rice Platter')).toBeInTheDocument()
+      expect(screen.getByText(momentMessage)).toBeInTheDocument()
+      expect(screen.getByTestId('accordion-handoff')).toBeDisabled()
+    })
+
+    it('reports a closed business instead of the schedule time it implies', () => {
+      renderWithProviders(<Cart cart={{ ...invalidPreorderCart, valid_schedule: false }} />)
+      expect(screen.getByText(closedMessage)).toBeInTheDocument()
+      expect(screen.queryByText(momentMessage)).not.toBeInTheDocument()
+    })
+
+    it('reports an address out of coverage', () => {
+      renderWithProviders(<Cart cart={{ ...cart, valid: false, valid_address: false }} />)
+      expect(screen.getByText(addressMessage)).toBeInTheDocument()
+    })
+
+    it('leaves a valid cart without reasons and with checkout available', () => {
+      renderWithProviders(<Cart cart={{ ...cart, valid: true }} />)
+      expect(screen.queryByText(momentMessage)).not.toBeInTheDocument()
+      expect(screen.queryByText(closedMessage)).not.toBeInTheDocument()
+      expect(screen.getByTestId('accordion-handoff')).not.toBeDisabled()
+    })
+
+    it('does not block a pending cart', () => {
+      renderWithProviders(<Cart cart={{ ...invalidPreorderCart, status: 2 }} isCartPending />)
+      expect(screen.queryByText(momentMessage)).not.toBeInTheDocument()
+      expect(screen.getByTestId('accordion-handoff')).not.toBeDisabled()
+    })
+
+    it('leaves the reasons to the checkout page warnings', () => {
+      renderWithProviders(<Cart cart={invalidPreorderCart} isCheckout />)
+      expect(screen.queryByText(momentMessage)).not.toBeInTheDocument()
+    })
   })
 })

@@ -1,5 +1,6 @@
 import React from 'react'
 import { PagesList as PagesListController } from '~ui/src/components/PagesList'
+import { HelmetTags } from '../../components/HelmetTags'
 
 export const PagesList = (props) => {
   const routes = [
@@ -14,7 +15,12 @@ export const PagesList = (props) => {
     { name: 'Checkout', slug: '/checkout' },
     { name: 'Pages', slug: '/pages' }
   ]
-  return <PagesListController {...props} routes={routes} />
+  return (
+    <>
+      <HelmetTags page='pages' />
+      <PagesListController {...props} routes={routes} />
+    </>
+  )
 }
 
 export default PagesList

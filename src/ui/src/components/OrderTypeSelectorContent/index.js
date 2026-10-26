@@ -76,56 +76,56 @@ export const OrderTypeSelectorContent = (props) => {
         value: 1,
         text: 'DELIVERY',
         textDisplay: t('DELIVERY', 'Delivery'),
-        description: t('ORDERTYPE_DESCRIPTION_DELIVERY', 'Delivery description'),
+        description: t('ORDERTYPE_DESCRIPTION_DELIVERY', 'We bring your order to your door'),
         image: theme.images?.deliveryTypes?.delivery
       },
       {
         value: 2,
         text: 'PICKUP',
         textDisplay: t('PICKUP', 'Pickup'),
-        description: t('ORDERTYPE_DESCRIPTION_PICKUP', 'Pickup description'),
+        description: t('ORDERTYPE_DESCRIPTION_PICKUP', 'Order ahead and pick it up at the store'),
         image: theme.images?.deliveryTypes?.pickUp
       },
       {
         value: 3,
         text: 'EAT_IN',
         textDisplay: t('EAT_IN', 'Eat in'),
-        description: t('ORDERTYPE_DESCRIPTION_EATIN', 'Eat in description'),
+        description: t('ORDERTYPE_DESCRIPTION_EATIN', 'Order ahead and enjoy it at the restaurant'),
         image: theme.images?.deliveryTypes?.eatIn
       },
       {
         value: 4,
         text: 'CURBSIDE',
         textDisplay: t('CURBSIDE', 'Curbside'),
-        description: t('ORDERTYPE_DESCRIPTION_CURBSIDE', 'Curbside description'),
+        description: t('ORDERTYPE_DESCRIPTION_CURBSIDE', 'We bring your order out to your car'),
         image: theme.images?.deliveryTypes?.curbside
       },
       {
         value: 5,
         text: 'DRIVE_THRU',
         textDisplay: t('DRIVE_THRU', 'Drive thru'),
-        description: t('ORDERTYPE_DESCRIPTION_DRIVETHRU', 'Drive Thru description'),
+        description: t('ORDERTYPE_DESCRIPTION_DRIVETHRU', 'Pick up your order without leaving your car'),
         image: theme.images?.deliveryTypes?.driveThru
       },
       {
         value: 7,
         text: 'CATERING_DELIVERY',
         textDisplay: t('CATERING_DELIVERY', 'Catering Delivery'),
-        description: t('ORDERTYPE_DESCRIPTION_CATERING_DELIVERY', 'Catering Delivery description'),
+        description: t('ORDERTYPE_DESCRIPTION_CATERING_DELIVERY', 'Food for groups, delivered to your event'),
         image: theme.images?.deliveryTypes?.cateringDelivery
       },
       {
         value: 8,
         text: 'CATERING_PICKUP',
         textDisplay: t('CATERING_PICKUP', 'Catering Pickup'),
-        description: t('ORDERTYPE_DESCRIPTION_CATERING_PICKUP', 'Catering Pickup description'),
+        description: t('ORDERTYPE_DESCRIPTION_CATERING_PICKUP', 'Food for groups, ready for you to pick up'),
         image: theme.images?.deliveryTypes?.cateringPickup
       },
       {
         value: 9,
         text: 'RESERVATION',
         textDisplay: t('RESERVATION', 'Reservation'),
-        description: t('ORDERTYPE_DESCRIPTION_RESERVATION', 'Reservation description'),
+        description: t('ORDERTYPE_DESCRIPTION_RESERVATION', 'Book a table in advance'),
         image: theme.images?.deliveryTypes?.reservation
       }
     ]

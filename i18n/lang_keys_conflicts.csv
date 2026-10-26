@@ -40,9 +40,7 @@ key,value,app_uses,submodule_uses
 "RESET_PASSWORD","Reset Password",4,0
 "RESET_PASSWORD","Reset password",8,0
 "ERROR_ADD_PRODUCT_BUSINESS_CLOSED","The Business is closed at the moment",1,0
-"ERROR_ADD_PRODUCT_BUSINESS_CLOSED","The business is closed at the moment",3,0
-"ALL_BUSINESSES","All businesses",1,0
-"ALL_BUSINESSES","All Businesses",1,0
+"ERROR_ADD_PRODUCT_BUSINESS_CLOSED","The business is closed at the moment",4,0
 "CHANGE_ADDRESS","Change address",2,0
 "CHANGE_ADDRESS","Select other Address",1,0
 "BUSINESSES","businesses",1,0
@@ -57,8 +55,6 @@ key,value,app_uses,submodule_uses
 "PLACE_ORDER","Place order",1,0
 "QUESTION_DELETE_CARD","Are you sure that you want to delete the card?",2,0
 "QUESTION_DELETE_CARD","Are you sure you want to delete this card?",1,0
-"CUSTOMER_DETAILS","Customer details",3,0
-"CUSTOMER_DETAILS","Customer Details",3,0
 "PAYMENT_METHOD","Payment Method",2,0
 "PAYMENT_METHOD","Payment method",1,0
 "TRY_AGAIN","Try again",1,0

@@ -107,7 +107,7 @@ describe('AppointmentsBusinessListing', () => {
     const { getByText, getByTestId } = renderWithProviders(<AppointmentsBusinessListing />)
     expect(getByText('Select a business')).toBeInTheDocument()
     expect(getByText('Popular services')).toBeInTheDocument()
-    expect(getByText('All businesses')).toBeInTheDocument()
+    expect(getByText('All Businesses')).toBeInTheDocument()
     expect(getByTestId('search')).toHaveAttribute('placeholder', 'Search Businesses')
     expect(getByTestId('empty')).toBeInTheDocument()
   })

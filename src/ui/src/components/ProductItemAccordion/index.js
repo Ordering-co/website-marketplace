@@ -99,7 +99,12 @@ const ProductItemAccordionUI = (props) => {
     }
   }
 
+  const otherLinesQuantity = (product?.balance ?? product?.quantity ?? 0) - (product?.quantity ?? 0)
+  const exceedsMaximum = (quantity) => !!product?.maximum_per_order && otherLinesQuantity + quantity > product?.maximum_per_order
+  const isMaximumReached = exceedsMaximum(product?.quantity + 1)
+
   const handleIncrement = () => {
+    if (isMaximumReached) return
     changeQuantity(product, product?.quantity + 1)
   }
 
@@ -130,8 +135,16 @@ const ProductItemAccordionUI = (props) => {
 
   return (
     <>
-      <AccordionSection transBackground={isCheckout || isOrderDetails} noBorder={isOrderDetails}>
+      <AccordionSection
+        data-doc-section='cart-product-row'
+        data-doc-product-id={product?.id}
+        transBackground={isCheckout || isOrderDetails}
+        noBorder={isOrderDetails}
+      >
         <Accordion
+          data-doc-section='cart-product'
+          data-doc-product-id={product?.id}
+          data-doc-state={product?.valid === false ? 'invalid' : 'valid'}
           hideQuantitySelector={hideQuantitySelector}
           noMargin={isCheckout || isOrderDetails || (!isStore && !isCheckout && !isOrderDetails && !isConfirmationPage)}
           className={`product accordion ${setActive}`}
@@ -139,7 +152,7 @@ const ProductItemAccordionUI = (props) => {
         >
           <ProductInfo className='info' isValid={product?.valid ?? true} hideQuantitySelector={hideQuantitySelector} midWidth={isCheckout || isOrderDetails} fullWidth={isOrderDetails}>
             {(!isCheckout && !isOrderDetails) && (product?.images || (!hideProductDummyLogo && theme?.images?.dummies?.product)) && showProductImage && (
-              <WrapperProductImage hideQuantitySelector={hideQuantitySelector} onClick={() => onEditProduct && !isDisabledEdit && onEditProduct(product)}>
+              <WrapperProductImage data-doc-control='cart-product-edit-image' hideQuantitySelector={hideQuantitySelector} onClick={() => onEditProduct && !isDisabledEdit && onEditProduct(product)}>
                 <ProductImage hideQuantitySelector={hideQuantitySelector} bgimage={product?.images || (!hideProductDummyLogo && theme?.images?.dummies?.product)}>
                 {onEditProduct && !isDisabledEdit && <IconContainer><Icon name="pencil" /></IconContainer>}
                 </ProductImage>
@@ -176,7 +189,7 @@ const ProductItemAccordionUI = (props) => {
                               <option
                                 key={i}
                                 value={i}
-                                disabled={offsetDisabled(product) < i && i !== 0}
+                                disabled={(offsetDisabled(product) < i || exceedsMaximum(i)) && i !== 0}
                               >
                                 {i === 0 ? t('REMOVE', 'Remove') : i}
                               </option>
@@ -202,7 +215,7 @@ const ProductItemAccordionUI = (props) => {
                           {isCartProduct && !isCartPending && (
                             <div>
                               {onEditProduct && !isDisabledEdit && (
-                                <span ref={productActionsEdit}>
+                                <span data-doc-control='cart-product-edit' ref={productActionsEdit}>
                                   <Icon name="pencil" color='#B1BCCC' onClick={() => onEditProduct(product)} />
                                 </span>
                               )}
@@ -236,6 +249,7 @@ const ProductItemAccordionUI = (props) => {
                   {product?.quantity > 1
                     ? (
                         <ProductActionsDecrement
+                          data-doc-control='cart-product-decrement'
                           ref={productActionsDecrement}
                           onClick={handleDecrement}
                           disabled={orderState.loading}
@@ -245,6 +259,7 @@ const ProductItemAccordionUI = (props) => {
                       )
                     : (
                         <ProductActionsDelete
+                          data-doc-control='cart-product-delete'
                           ref={productActionsDelete}
                           onClick={() => onDeleteProduct(product)}
                           disabled={orderState.loading}
@@ -260,9 +275,10 @@ const ProductItemAccordionUI = (props) => {
                 )}
                 {!isDisabledEdit && !isCartPending && product?.valid_quantity && product?.valid_menu && (
                   <ProductActionsIncrement
+                    data-doc-control='cart-product-increment'
                     ref={productActionsIncrement}
                     onClick={handleIncrement}
-                    disabled={orderState.loading}
+                    disabled={orderState.loading || isMaximumReached}
                   >
                     <Icon name="plusSquareFill" />
                   </ProductActionsIncrement>
@@ -290,6 +306,7 @@ const ProductItemAccordionUI = (props) => {
                     <ProductActions>
                       {!isDisabledEdit && (
                         <ProductActionsEdit
+                          data-doc-control='cart-product-edit'
                           ref={productActionsEdit}
                           onClick={() => onEditProduct(product)}
                           disabled={orderState.loading}
@@ -299,6 +316,7 @@ const ProductItemAccordionUI = (props) => {
                       )}
                       {onDeleteProduct && (
                         <ProductActionsDelete
+                          data-doc-control='cart-product-delete'
                           ref={productActionsDelete}
                           onClick={() => onDeleteProduct(product)}
                           disabled={orderState.loading}
@@ -318,6 +336,7 @@ const ProductItemAccordionUI = (props) => {
                 <ProductActions>
                   {!hideQuantitySelector && !isDisabledEdit && (
                     <ProductActionsEdit
+                      data-doc-control='cart-product-edit'
                       ref={productActionsEdit}
                       onClick={() => onEditProduct(product)}
                       disabled={orderState.loading}
@@ -327,6 +346,7 @@ const ProductItemAccordionUI = (props) => {
                   )}
                   {onDeleteProduct && (
                     <ProductActionsDelete
+                      data-doc-control='cart-product-delete'
                       ref={productActionsDelete}
                       onClick={() => onDeleteProduct(product)}
                       disabled={orderState.loading}
@@ -346,6 +366,7 @@ const ProductItemAccordionUI = (props) => {
               <ProductActions>
                 {onDeleteProduct && (
                   <ProductActionsDelete
+                    data-doc-control='cart-product-delete'
                     ref={productActionsDelete}
                     onClick={() => onDeleteProduct(product)}
                     disabled={orderState.loading}

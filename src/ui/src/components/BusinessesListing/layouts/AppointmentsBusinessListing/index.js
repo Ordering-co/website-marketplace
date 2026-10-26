@@ -215,7 +215,7 @@ const BusinessListingUI = (props) => {
                 />
               </HightestRatedWrapper>
             )}
-            <h2>{t('ALL_BUSINESSES', 'All businesses')}</h2>
+            <h2>{t('ALL_BUSINESSES', 'All Businesses')}</h2>
             <BusinessList>
               {
                 !businessesList.loading && businessesList.businesses.length === 0 && (

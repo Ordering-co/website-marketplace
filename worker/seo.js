@@ -1,3 +1,5 @@
+import { DEFAULT_SEO_DESCRIPTION, resolveSeoDescription } from '../src/utils/seoDescription.js'
+
 const ORDERING_DOMAINS = ['tryordering.com', 'ordering.co', 'orderingplus.com']
 export const ORDERING_FAVICON = '/favicon.png'
 export const WHITE_LABEL_LOGO = '/default-logo.png'
@@ -160,7 +162,6 @@ export const ROUTER_CACHE_KEY_BASE = 'https://websites-router.internal'
 const FIRST_LOAD_PARAMS = 'features,configs,site(name,description,code,domain,temporal_domain,type,logo,header,image,social_share,deployment_provider_settings,business(name,slug),franchise(name,slug)),theme'
 
 export const DEFAULT_SEO_TITLE = 'Ordering'
-export const DEFAULT_SEO_DESCRIPTION = 'Food marketplace by ordering.inc'
 
 const pickNonEmptyString = (value) => {
   if (typeof value !== 'string') return null
@@ -498,23 +499,26 @@ export const getTitle = (seoData) => {
 }
 
 /**
- * Builds OG/meta fallbacks from first_load.site when the SEO API omits fields.
- * Defaults mirror index.html shell values.
+ * Builds OG/meta fallbacks from first_load.site and the site theme
+ * (website_settings description) when the SEO API omits fields.
  * site.image is the home hero — not used for social previews.
  * logo is what marketplace owners upload in Ordering Website settings.
  */
-export const buildSiteSeoFallback = (site, requestUrl) => {
+export const buildSiteSeoFallback = (site, requestUrl, theme = null) => {
   const title = pickNonEmptyString(site?.name) || DEFAULT_SEO_TITLE
-  const description = pickNonEmptyString(site?.description) || DEFAULT_SEO_DESCRIPTION
+  const description = resolveSeoDescription(
+    site?.description,
+    theme?.my_products?.components?.website_settings?.components?.values?.description
+  )
   const image = pickNonEmptyString(site?.social_share) ||
     pickNonEmptyString(site?.logo) ||
     pickNonEmptyString(site?.header) ||
     null
 
   const metas = [
-    { name: 'description', content: description },
+    ...(description ? [{ name: 'description', content: description }] : []),
     { property: 'og:title', content: title },
-    { property: 'og:description', content: description },
+    ...(description ? [{ property: 'og:description', content: description }] : []),
     { property: 'og:type', content: 'website' },
     { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' }
   ]
@@ -538,6 +542,30 @@ const metaKey = (meta) => {
   return null
 }
 
+// Canonical metadata shape: og:* emits property; twitter:* and description emit
+// name. Equivalent name/property spellings are normalized to one identity
+// before filtering and dedup, and the opposite attribute is stripped from a
+// clone so the injector (which prefers name) cannot emit the alias. Source
+// payloads are never mutated; unrelated keys pass through untouched.
+const normalizeSeoMeta = (meta) => {
+  if (!meta || typeof meta !== 'object') return meta
+  const key = typeof meta.property === 'string' && meta.property
+    ? meta.property
+    : (typeof meta.name === 'string' && meta.name ? meta.name : null)
+  if (!key) return meta
+  if (key === 'description' || key.startsWith('twitter:')) {
+    const { property, ...rest } = meta
+    return { ...rest, name: key }
+  }
+  if (key.startsWith('og:')) {
+    const { name, ...rest } = meta
+    return { ...rest, property: key }
+  }
+  return meta
+}
+
+const DESCRIPTION_META_KEYS = new Set(['description', 'og:description', 'twitter:description'])
+
 /**
  * Merges SEO API metas with site fallbacks. On /seo/general, site fields win;
  * on page-specific routes, SEO API wins and site fills gaps.
@@ -551,9 +579,17 @@ export const mergeSeoData = (seoData, siteFallback, { preferSite = false, site =
 
   const addMeta = (meta) => {
     if (!meta || meta.content === null || meta.content === undefined) return
-    const key = metaKey(meta)
+    const isDescriptionMeta = DESCRIPTION_META_KEYS.has(meta.name) || DESCRIPTION_META_KEYS.has(meta.property)
+    const normalized = normalizeSeoMeta(meta)
+    const key = metaKey(normalized)
     if (!key || mergedMap.has(key)) return
-    mergedMap.set(key, meta)
+    if (isDescriptionMeta) {
+      const content = resolveSeoDescription(normalized.content)
+      if (!content) return
+      mergedMap.set(key, { ...normalized, content })
+      return
+    }
+    mergedMap.set(key, normalized)
   }
 
   if (preferSite) {
@@ -562,6 +598,21 @@ export const mergeSeoData = (seoData, siteFallback, { preferSite = false, site =
   } else {
     for (const meta of seoMetas) addMeta(meta)
     for (const meta of fallbackMetas) addMeta(meta)
+  }
+
+  // After both sources merged, backfill only missing description fields.
+  // addMeta filters template values, so set the shared default directly.
+  if (!mergedMap.has('n:description')) {
+    mergedMap.set('n:description', {
+      name: 'description',
+      content: mergedMap.get('p:og:description')?.content ?? DEFAULT_SEO_DESCRIPTION
+    })
+  }
+  if (!mergedMap.has('p:og:description')) {
+    mergedMap.set('p:og:description', {
+      property: 'og:description',
+      content: mergedMap.get('n:description')?.content ?? DEFAULT_SEO_DESCRIPTION
+    })
   }
 
   const seoTitle = getTitle(seoData)

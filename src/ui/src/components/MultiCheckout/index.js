@@ -326,6 +326,14 @@ const MultiCheckoutUI = (props) => {
     }
   }, [openCarts, cartGroup])
 
+  const contextDriverTips = openCarts.map((cart) => Number(orderState?.carts?.[`businessId:${cart?.business_id}`]?.driver_tip ?? 0)).join('|')
+  const groupDriverTips = openCarts.map((cart) => Number(cart?.driver_tip ?? 0)).join('|')
+
+  useEffect(() => {
+    if (orderState?.loading || cartGroup?.loading || !openCarts.length) return
+    if (contextDriverTips !== groupDriverTips) getMultiCart && getMultiCart()
+  }, [contextDriverTips, orderState?.loading])
+
   useEffect(() => {
     if (walletState.error) {
       showToast(ToastType.Error, t(walletState.error, walletState.error?.[0]?.replace(/_/g, ' ')))
@@ -373,7 +381,7 @@ const MultiCheckoutUI = (props) => {
                     {(user?.guest_id && (!allowedGuest || !guestCheckoutAllowed))
                       ? (
                         <AuthButtonList>
-                          <h2>{t('CUSTOMER_DETAILS', 'Customer details')}</h2>
+                          <h2>{t('CUSTOMER_DETAILS', 'Customer Details')}</h2>
                           <Button color='primary' onClick={() => setOpenModal({ ...openModal, signup: true })}>
                             {t('SIGN_UP', 'Sign up')}
                           </Button>

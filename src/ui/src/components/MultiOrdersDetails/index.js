@@ -91,7 +91,7 @@ const MultiOrdersDetailsUI = (props) => {
             : (
             <CustomerInfoContainer>
               <CustomerDetails>
-                <h3>{t('CUSTOMER_DETAILS', 'Customer details')}</h3>
+                <h3>{t('CUSTOMER_DETAILS', 'Customer Details')}</h3>
                 <div>
                   <PhotoWrapper>
                     <Image

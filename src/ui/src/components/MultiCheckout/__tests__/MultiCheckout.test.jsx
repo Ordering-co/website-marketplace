@@ -229,4 +229,17 @@ describe('MultiCheckout', () => {
     expect(handleGroupPlaceOrder).not.toHaveBeenCalled()
     expect(getByText('Place Order').closest('button')).toBeDisabled()
   })
+
+  it('refreshes the cart group when the driver tip in the order context changes', () => {
+    const getMultiCart = vi.fn()
+    const groupCart = { ...foodCart, driver_tip: 0 }
+    orderMocks.state = { options: { type: 1 }, carts: { 'businessId:2': { ...groupCart } } }
+    const { rerender } = renderWithProviders(
+      <MultiCheckout cartUuid='group-1' openCarts={[groupCart]} getMultiCart={getMultiCart} />
+    )
+    expect(getMultiCart).not.toHaveBeenCalled()
+    orderMocks.state = { options: { type: 1 }, carts: { 'businessId:2': { ...groupCart, driver_tip: 3.3 } } }
+    rerender(<MultiCheckout cartUuid='group-1' openCarts={[groupCart]} getMultiCart={getMultiCart} />)
+    expect(getMultiCart).toHaveBeenCalledTimes(1)
+  })
 })

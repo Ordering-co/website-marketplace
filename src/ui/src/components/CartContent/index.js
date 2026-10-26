@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import Skeleton from 'react-loading-skeleton'
+import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from 'styled-components'
 import settings from '~/config'
 import { useFreeDeliveryProgress } from '~components/hooks/useFreeDeliveryProgress'
@@ -14,12 +16,14 @@ import { useSession } from '~components/contexts/SessionContext'
 import { Cart } from '~ui/src/components/Cart'
 import { Button } from '~ui/src/styles/Buttons'
 import { NotFoundSource } from '~ui/src/components/NotFoundSource'
+import { useCartGroupPreview } from '~ui/hooks/useCartGroupPreview'
 
-const CartGroup = React.memo(({ group, index, renderCart, handleClickCheckout }) => {
+const CartGroup = React.memo(({ group, index, renderCart, handleClickCheckout, groupCartsByUuid, isGroupPricingPending }) => {
   const [, t] = useLanguage()
   const [{ parsePrice }] = useUtils()
   const validCarts = group.filter(cart => cart?.valid)
   const hasPending = validCarts.some(cart => cart?.status === 2)
+  const groupTotal = validCarts.reduce((total, cart) => total + (groupCartsByUuid?.[cart?.uuid] ?? cart)?.total, 0)
 
   // Invalid carts cannot checkout — hide them entirely (/670).
   if (!validCarts.length) return null
@@ -38,7 +42,7 @@ const CartGroup = React.memo(({ group, index, renderCart, handleClickCheckout })
       {validCarts.map(cart => renderCart(cart))}
       <CartGroupTotal>
         <h4>{t('TOTAL_FOR', 'Total for')} {t('CART', 'Cart')} #{index + 1}</h4>
-        <h4>{parsePrice(validCarts.reduce((total, cart) => total + cart?.total, 0))}</h4>
+        <h4>{isGroupPricingPending && !hasPending ? <Skeleton width={80} /> : parsePrice(groupTotal)}</h4>
       </CartGroupTotal>
     </React.Fragment>
   )
@@ -142,13 +146,25 @@ export const CartContent = (props) => {
   const hasCartReservation = carts?.some(cart => cart?.reservation)
   const checkoutMultiBusinessEnabled = orderState?.options?.type !== 9 && !hasCartReservation && configs?.checkout_multi_business_enabled?.value === '1'
   const validCartsList = useMemo(() => carts?.filter((cart) => cart?.valid) || [], [carts])
-  const hasDisplayableCarts = validCartsList.length > 0
-  const totalCartsPrice = hasDisplayableCarts && validCartsList
+  const displayableCartsList = useMemo(() => carts?.filter((cart) => cart?.products?.length > 0 || cart?.reservation) || [], [carts])
+  const invalidCartsList = useMemo(() => displayableCartsList.filter((cart) => !cart?.valid), [displayableCartsList])
+  const hasValidCarts = validCartsList.length > 0
+  const hasDisplayableCarts = displayableCartsList.length > 0
+  const { cartGroup, isPending: isGroupPricingPending } = useCartGroupPreview({ enabled: !!isOrderStateCarts && checkoutMultiBusinessEnabled && !isCustomerMode })
+  const groupCartsByUuid = useMemo(
+    () => (cartGroup?.carts || []).reduce((map, cart) => ({ ...map, [cart?.uuid]: cart }), {}),
+    [cartGroup]
+  )
+  const pricedCartsList = useMemo(
+    () => validCartsList.map(cart => groupCartsByUuid[cart?.uuid] ?? cart),
+    [validCartsList, groupCartsByUuid]
+  )
+  const totalCartsPrice = hasValidCarts && pricedCartsList
     .reduce((total, cart) => { return total + cart?.total }, 0)
-  const totalCartsFee = hasDisplayableCarts && validCartsList
+  const totalCartsFee = hasValidCarts && pricedCartsList
     .filter((cart) => cart?.status !== 1)
     .reduce((total, cart) => { return total + (cart?.delivery_price_with_discount) }, 0)
-  const totalDriverTip = validCartsList.reduce((sum, cart) => sum + (cart?.driver_tip || 0), 0)
+  const totalDriverTip = pricedCartsList.reduce((sum, cart) => sum + (cart?.driver_tip || 0), 0)
 
   const hideTitle = true
 
@@ -202,8 +218,9 @@ export const CartContent = (props) => {
 
   const handleClickCheckout = async (group, singleUuid) => {
     const isSingleCart = cartsAvailable.length === 1
-    const hasNotGroup = group.some(cart => !cart?.group?.uuid)
-    const cartGroupUuid = group[0]?.group?.uuid
+    const previewGroupUuid = cartGroup?.uuid && group.every(cart => groupCartsByUuid[cart?.uuid]) ? cartGroup.uuid : null
+    const hasNotGroup = !previewGroupUuid && group.some(cart => !cart?.group?.uuid)
+    const cartGroupUuid = previewGroupUuid ?? group[0]?.group?.uuid
     if (isSingleCart || singleUuid) {
       events.emit('go_to_page', { page: 'checkout', params: { cartUuid: singleUuid } })
     } else if (hasNotGroup) {
@@ -274,22 +291,25 @@ export const CartContent = (props) => {
                       index={i}
                       renderCart={renderCart}
                       handleClickCheckout={handleClickCheckout}
+                      groupCartsByUuid={groupCartsByUuid}
+                      isGroupPricingPending={isGroupPricingPending}
                     />
                     <CartGroupDivider />
                   </React.Fragment>
                     ))
                 )
               : (
-                  validCartsList.map(renderCart)
+                  displayableCartsList.map(renderCart)
                 )}
-            {checkoutMultiBusinessEnabled && hasDisplayableCarts && (
+            {checkoutMultiBusinessEnabled && invalidCartsList.map(renderCart)}
+            {checkoutMultiBusinessEnabled && hasValidCarts && (
               <MultiCartPriceContainer>
-                {!!totalCartsFee &&
+                {(isGroupPricingPending || !!totalCartsFee) &&
                   configs?.multi_business_checkout_show_combined_delivery_fee?.value === '1' &&
                   (
                     <span>
                       <p>{t('TOTAL_DELIVERY_FEE', 'Total delivery fee')}</p>
-                      <p>{parsePrice(totalCartsFee)}</p>
+                      <p>{isGroupPricingPending ? <Skeleton width={60} /> : parsePrice(totalCartsFee)}</p>
                     </span>
                   )}
                 {totalDriverTip > 0 &&
@@ -302,7 +322,7 @@ export const CartContent = (props) => {
                   )}
                 <div>
                   <h4>{t('TOTAL_FOR_ALL_CARTS', 'Total for all Carts')}</h4>
-                  <h4>{parsePrice(totalCartsPrice)}</h4>
+                  <h4>{isGroupPricingPending ? <Skeleton width={90} /> : parsePrice(totalCartsPrice)}</h4>
                 </div>
                 <span>
                   <p>{t('CART_GROUP_MESSAGE_ALERT', 'Discounts may be applied at the time of payment for this group.')}</p>
