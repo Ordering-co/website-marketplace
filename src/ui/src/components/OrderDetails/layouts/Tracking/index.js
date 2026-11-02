@@ -17,6 +17,7 @@ import { OrderEtaRange } from './OrderEtaRange'
 import { DeliveryOrderTabs } from './DeliveryOrderTabs'
 import { SatisfactionSurvey } from './SatisfactionSurvey'
 import { TrackingProductItem } from './TrackingProductItem'
+import { DeliveryPin } from '../../DeliveryPin'
 import {
   getTrackingStep,
   getTrackingPercentage,
@@ -281,6 +282,10 @@ export const OrderTrackingLayout = (props) => {
                   </>
                   )}
             </p>
+          )}
+
+          {!isCompleted && (
+            <DeliveryPin order={order} />
           )}
 
           {isRejected && (

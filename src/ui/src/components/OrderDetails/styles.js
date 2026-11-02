@@ -1585,3 +1585,41 @@ export const ReviewsProgressContent = styled.div`
     padding-left: 0;
   }
 `
+
+export const DeliveryPinContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 360px;
+  margin: 12px auto 0;
+  padding: 12px 20px;
+  text-align: center;
+  background-color: ${props => props.theme.colors.white};
+  border: 1px dashed ${props => props.theme.colors.primary};
+  border-radius: 12px;
+`
+
+export const DeliveryPinLabel = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${props => props.theme.colors.darkTextColor};
+`
+
+export const DeliveryPinValue = styled.span`
+  direction: ltr;
+  padding-left: 8px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 8px;
+  font-variant-numeric: tabular-nums;
+  color: ${props => props.theme.colors.darkTextColor};
+`
+
+export const DeliveryPinHelp = styled.span`
+  font-size: 13px;
+  color: ${props => props.theme.colors.darkGray};
+`

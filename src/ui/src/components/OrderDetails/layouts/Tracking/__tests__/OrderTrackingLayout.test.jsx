@@ -209,6 +209,29 @@ describe('OrderTrackingLayout', () => {
     expect(queryByTestId('survey')).toBeNull()
   })
 
+  it('shows the delivery PIN with its leading zero while it is requested', () => {
+    const { getByTestId } = renderLayout({ delivery_pin: '0427', delivery_pin_status: 'requested' })
+    const pin = getByTestId('delivery-pin')
+    expect(pin).toHaveTextContent('Delivery PIN')
+    expect(pin).toHaveTextContent('0427')
+    expect(pin).toHaveTextContent('Give this code to the driver when you receive your order')
+  })
+
+  it('hides the delivery PIN once it is validated', () => {
+    const { queryByTestId } = renderLayout({ delivery_pin: '0427', delivery_pin_status: 'validated' })
+    expect(queryByTestId('delivery-pin')).toBeNull()
+  })
+
+  it('hides the delivery PIN when the order has no PIN', () => {
+    const { queryByTestId } = renderLayout({ delivery_pin: null, delivery_pin_status: 'requested' })
+    expect(queryByTestId('delivery-pin')).toBeNull()
+  })
+
+  it('hides the delivery PIN once the order is completed', () => {
+    const { queryByTestId } = renderLayout({ status: 11, delivery_pin: '0427', delivery_pin_status: 'requested' })
+    expect(queryByTestId('delivery-pin')).toBeNull()
+  })
+
   it('falls back to the classic status and the customer and driver cards for pickup orders', () => {
     const { getByText, container, queryByTestId, queryByText } = renderLayout({
       status: 4,

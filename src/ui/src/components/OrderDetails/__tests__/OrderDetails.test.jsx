@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../../../../__tests__/helpers/testUtils'
 import { activeOrder } from '../../__tests__/helpers/ordersTestMocks'
 import { OrderDetails } from '../index'
@@ -81,10 +81,47 @@ vi.mock('~ui/src/components/GiftCard/SendGiftCard', () => ({
   SendGiftCard: () => null
 }))
 
+const renderOrderDetails = (overrides = {}) => {
+  const order = { ...orderFixture, ...overrides }
+  return renderWithProviders(
+    <OrderDetails
+      orderId={activeOrder.uuid}
+      order={{ loading: false, error: null, order, businessData: order.business }}
+    />
+  )
+}
+
 describe('OrderDetails', () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn()
+  })
+
   it('renders in-progress order header', () => {
     const { getByText } = renderWithProviders(<OrderDetails orderId={activeOrder.uuid} />)
     expect(getByText(/Order:/)).toBeInTheDocument()
     expect(getByText('Your order is in progress')).toBeInTheDocument()
+  })
+
+  it('shows the delivery PIN with its leading zero while it is requested', () => {
+    const { getByTestId } = renderOrderDetails({ delivery_pin: '0427', delivery_pin_status: 'requested' })
+    const pin = getByTestId('delivery-pin')
+    expect(pin).toHaveTextContent('Delivery PIN')
+    expect(pin).toHaveTextContent('0427')
+    expect(pin).toHaveTextContent('Give this code to the driver when you receive your order')
+  })
+
+  it('hides the delivery PIN once it is validated', () => {
+    const { queryByTestId } = renderOrderDetails({ delivery_pin: '0427', delivery_pin_status: 'validated' })
+    expect(queryByTestId('delivery-pin')).toBeNull()
+  })
+
+  it('hides the delivery PIN when the order has no PIN', () => {
+    const { queryByTestId } = renderOrderDetails({ delivery_pin: null, delivery_pin_status: 'requested' })
+    expect(queryByTestId('delivery-pin')).toBeNull()
+  })
+
+  it('hides the delivery PIN once the order is completed', () => {
+    const { queryByTestId } = renderOrderDetails({ status: 1, delivery_pin: '0427', delivery_pin_status: 'requested' })
+    expect(queryByTestId('delivery-pin')).toBeNull()
   })
 })

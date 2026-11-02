@@ -169,6 +169,7 @@ export const WrapInput = styled.div`
 
   ${({ $withIcon }) => $withIcon && css`
     width: calc(100%);
+    min-width: 0;
     box-sizing: border-box;
 
     &::before {
@@ -327,10 +328,12 @@ export const HeroContent = styled.div`
     }
 
     @media (min-width: 768px) {
-      width: 100%;
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 254px;
       height: 100%;
       font-size: 18px;
-      max-width: 254px;
+      padding: 15px 32px;
       margin-bottom: 0;
       line-height: initial;
     }

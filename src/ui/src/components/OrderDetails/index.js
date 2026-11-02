@@ -42,6 +42,7 @@ import { useBusiness } from '~components/contexts/BusinessContext'
 import { GoogleMaps as GoogleMapsMap } from '~components/components/GoogleMaps'
 
 import { OrderEta } from './OrderEta'
+import { DeliveryPin } from './DeliveryPin'
 import { OrderTrackingLayout } from './layouts/Tracking'
 import { OrderBillSection } from './OrderBillSection'
 import { OrderRewardsBanner } from './OrderRewardsBanner'
@@ -404,6 +405,7 @@ const OrderDetailsUI = (props) => {
         <WrapperContainer>
           <OrderInfo>
             <h1 className='order-id'>{t('ORDER', 'Order')}: {(changeIdToExternalId && order?.external_id) || `#${order?.id}`}</h1>
+            <DeliveryPin order={order} />
             <div className='order-progress'>
               <span>{currentOrderStatusText}</span>
               <div className='life-saver-icon' onClick={() => handleGoToPage({ page: 'help' })}>

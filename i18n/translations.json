@@ -4241,6 +4241,34 @@
     "bg": "Таксите за доставка варират за всеки ресторант в зависимост от вашето местоположение и други фактори.",
     "tr": "Teslimat ücretleri, bulunduğunuz yere ve diğer faktörlere bağlı olarak her restorana göre değişir."
   },
+  "DELIVERY_PIN": {
+    "en": "Delivery PIN",
+    "es": "PIN de entrega",
+    "fr": "Code PIN de livraison",
+    "it": "PIN di consegna",
+    "de": "Liefer-PIN",
+    "pt": "PIN de entrega",
+    "da": "Leverings-PIN",
+    "nl": "Bezorgpincode",
+    "ar": "رمز PIN للتوصيل",
+    "el": "PIN παράδοσης",
+    "bg": "ПИН за доставка",
+    "tr": "Teslimat PIN'i"
+  },
+  "DELIVERY_PIN_HELP": {
+    "en": "Give this code to the driver when you receive your order",
+    "es": "Dáselo al repartidor cuando recibas tu pedido",
+    "fr": "Donnez ce code au livreur à la réception de votre commande",
+    "it": "Comunica questo codice al fattorino quando ricevi il tuo ordine",
+    "de": "Geben Sie diesen Code dem Fahrer, wenn Sie Ihre Bestellung erhalten",
+    "pt": "Informe este código ao entregador quando receber seu pedido",
+    "da": "Giv denne kode til buddet, når du modtager din ordre",
+    "nl": "Geef deze code aan de bezorger wanneer u uw bestelling ontvangt",
+    "ar": "أعطِ هذا الرمز لمندوب التوصيل عند استلام طلبك",
+    "el": "Δώστε αυτόν τον κωδικό στον διανομέα όταν παραλάβετε την παραγγελία σας",
+    "bg": "Дайте този код на куриера, когато получите поръчката си",
+    "tr": "Siparişinizi teslim aldığınızda bu kodu kuryeye verin"
+  },
   "DELIVERY_PREFERENCE": {
     "en": "Delivery preference",
     "es": "Preferencia de entrega",
@@ -6984,6 +7012,20 @@
     "el": "Σπίτι",
     "bg": "Начало",
     "tr": "Ev"
+  },
+  "HOME_HERO_SEARCH_BUTTON": {
+    "en": "Search",
+    "es": "Buscar",
+    "fr": "Rechercher",
+    "it": "Cerca",
+    "de": "Suchen",
+    "pt": "Pesquisar",
+    "da": "Søg",
+    "nl": "Zoeken",
+    "ar": "بحث",
+    "el": "Αναζήτηση",
+    "bg": "Търсене",
+    "tr": "Ara"
   },
   "HOW_WAS_DRIVER_DELIVERY": {
     "en": "How was _driver_ delivery?",
@@ -17932,6 +17974,34 @@
     "el": "Πληκτρολογήστε τον κωδικό επαλήθευσης που στάλθηκε στο email σας",
     "bg": "Моля, въведете кода за потвърждение, изпратен на вашия имейл",
     "tr": "Lütfen e-postanıza gönderilen doğrulama kodunu yazın"
+  },
+  "VERIFICATION_EMAIL_MISSING": {
+    "en": "This account has no email address. An email address is required to send a verification code.",
+    "es": "Esta cuenta no tiene una dirección de correo electrónico. Se requiere una dirección de correo electrónico para enviar un código de verificación.",
+    "fr": "Ce compte n'a pas d'adresse e-mail. Une adresse e-mail est requise pour envoyer un code de vérification.",
+    "it": "Questo account non ha un indirizzo e-mail. È necessario un indirizzo e-mail per inviare un codice di verifica.",
+    "de": "Dieses Konto hat keine E-Mail-Adresse. Zum Senden eines Verifizierungscodes ist eine E-Mail-Adresse erforderlich.",
+    "pt": "Esta conta não tem um endereço de e-mail. É necessário um endereço de e-mail para enviar um código de verificação.",
+    "da": "Denne konto har ingen e-mailadresse. Der kræves en e-mailadresse for at sende en bekræftelseskode.",
+    "nl": "Dit account heeft geen e-mailadres. Er is een e-mailadres vereist om een verificatiecode te verzenden.",
+    "ar": "هذا الحساب ليس لديه عنوان بريد إلكتروني. يلزم عنوان بريد إلكتروني لإرسال رمز التحقق.",
+    "el": "Αυτός ο λογαριασμός δεν έχει διεύθυνση email. Απαιτείται διεύθυνση email για την αποστολή κωδικού επαλήθευσης.",
+    "bg": "Този акаунт няма имейл адрес. Необходим е имейл адрес, за да се изпрати код за потвърждение.",
+    "tr": "Bu hesabın bir e-posta adresi yok. Doğrulama kodu göndermek için bir e-posta adresi gereklidir."
+  },
+  "VERIFICATION_EMAIL_RECOVERY": {
+    "en": "If this email is already in use, enter another email or log out, then log in or sign up with this email.",
+    "es": "Si este correo electrónico ya está en uso, ingresa otro correo electrónico o cierra sesión, luego inicia sesión o regístrate con este correo electrónico.",
+    "fr": "Si cet e-mail est déjà utilisé, saisissez un autre e-mail ou déconnectez-vous, puis connectez-vous ou inscrivez-vous avec cet e-mail.",
+    "it": "Se questa e-mail è già in uso, inserisci un'altra e-mail o esci, quindi accedi o registrati con questa e-mail.",
+    "de": "Wenn diese E-Mail bereits verwendet wird, gib eine andere E-Mail ein oder melde dich ab, und melde dich dann mit dieser E-Mail an oder registriere dich.",
+    "pt": "Se este e-mail já estiver em uso, insira outro e-mail ou saia e depois inicie sessão ou registe-se com este e-mail.",
+    "da": "Hvis denne e-mail allerede er i brug, skal du indtaste en anden e-mail eller logge ud og derefter logge ind eller tilmelde dig med denne e-mail.",
+    "nl": "Als deze e-mail al in gebruik is, voer dan een ander e-mailadres in of log uit en log daarna in of registreer je met dit e-mailadres.",
+    "ar": "إذا كان هذا البريد الإلكتروني مستخدمًا بالفعل، فأدخل بريدًا إلكترونيًا آخر أو سجّل الخروج، ثم سجّل الدخول أو أنشئ حسابًا بهذا البريد الإلكتروني.",
+    "el": "Εάν αυτό το email χρησιμοποιείται ήδη, εισαγάγετε ένα άλλο email ή αποσυνδεθείτε και, στη συνέχεια, συνδεθείτε ή εγγραφείτε με αυτό το email.",
+    "bg": "Ако този имейл вече се използва, въведете друг имейл или излезте, след което влезте или се регистрирайте с този имейл.",
+    "tr": "Bu e-posta zaten kullanımdaysa, başka bir e-posta girin veya oturumu kapatın, ardından bu e-posta ile giriş yapın veya kaydolun."
   },
   "VERIFICATION_PHONE_CODE_MESSAGE": {
     "en": "In order to continue using our platform please verify your phone number",

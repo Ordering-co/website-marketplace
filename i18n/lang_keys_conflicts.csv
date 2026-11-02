@@ -1,5 +1,5 @@
 key,value,app_uses,submodule_uses
-"ERROR","Error",29,10
+"ERROR","Error",32,10
 "ERROR","ERROR",2,0
 "RECAPTCHA_VALIDATION_IS_REQUIRED","The captcha validation is required",0,2
 "RECAPTCHA_VALIDATION_IS_REQUIRED","The ReCaptcha validation is required.",0,3
@@ -61,7 +61,7 @@ key,value,app_uses,submodule_uses
 "TRY_AGAIN","Please try again",4,0
 "ORDERS","Orders",3,0
 "ORDERS","orders",2,0
-"EMAIL","Email",14,0
+"EMAIL","Email",17,0
 "EMAIL","EMail",1,0
 "GIFT_CARD","Gift Card",2,0
 "GIFT_CARD","Gift card",2,0

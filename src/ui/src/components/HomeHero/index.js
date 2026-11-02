@@ -168,7 +168,7 @@ export const HomeHero = (props) => {
               name='find-business'
               onClick={handleFindBusinesses}
             >
-              {t('SEARCH', theme?.defaultLanguages?.SEARCH || 'Search')}
+              {t('HOME_HERO_SEARCH_BUTTON', theme?.defaultLanguages?.HOME_HERO_SEARCH_BUTTON || 'Search')}
             </Button>
           </div>
         </HeroContent>

@@ -14,6 +14,7 @@ import {
 
 import { UserVerification as UserVerificationController } from '~components/components/UserVerification'
 import { UserFormDetails as UserFormController } from '~components/components/UserFormDetails'
+import { LogoutAction as LogoutActionController } from '~components/components/LogoutAction'
 import { useSession } from '~components/contexts/SessionContext'
 import { useLanguage } from '~components/contexts/LanguageContext'
 import { useConfig } from '~components/contexts/ConfigContext'
@@ -41,6 +42,153 @@ const UserDetails = (props) => {
   return <UserFormController {...userDetailsProps} />
 }
 
+const VerificationEmailRecovery = ({ formState, handleLogoutClick, disabled, onExiting }) => {
+  const [, t] = useLanguage()
+  const handleExit = async () => {
+    if (disabled || formState.loading) return
+    onExiting(true)
+    try {
+      await handleLogoutClick()
+    } finally {
+      onExiting(false)
+    }
+  }
+  return (
+    <>
+      <WarningText>{t('VERIFICATION_EMAIL_RECOVERY', 'If this email is already in use, enter another email or log out, then log in or sign up with this email.')}</WarningText>
+      <Button type='button' color='secundary' disabled={disabled || formState.loading} onClick={handleExit}>
+        {t('LOGOUT', 'Logout')}
+      </Button>
+      {formState.result?.error && <WarningText role='alert'>{t('ERROR', 'Error')}</WarningText>}
+    </>
+  )
+}
+
+const VerificationEmailForm = (props) => {
+  const {
+    formState,
+    handleButtonUpdateClick,
+    verifyEmailState,
+    user,
+    onCancel
+  } = props
+
+  const [, t] = useLanguage()
+  const [email, setEmail] = useState(user?.email || user?.guest_email || '')
+  const [validationError, setValidationError] = useState(null)
+  const [exiting, setExiting] = useState(false)
+  const loading = exiting || formState?.loading || verifyEmailState?.loadingSendCode || verifyEmailState?.loadingCheckCode
+
+  const handleSaveEmail = () => {
+    if (loading) return
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail) {
+      setValidationError(t('VALIDATION_ERROR_EMAIL_REQUIRED', 'The field Email is required').replace('_attribute_', t('EMAIL', 'Email')))
+      return
+    }
+    if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(normalizedEmail)) {
+      setValidationError(t('INVALID_ERROR_EMAIL', 'Invalid email address').replace('_attribute_', t('EMAIL', 'Email')))
+      return
+    }
+    setValidationError(null)
+    if (user?.email && normalizedEmail === user.email.trim().toLowerCase()) {
+      onCancel?.()
+      return
+    }
+    handleButtonUpdateClick({ email: normalizedEmail })
+  }
+
+  const saveError = formState?.result?.error
+  const saveErrorText = (item) => {
+    if (typeof item === 'string') return item
+    if (!item || typeof item !== 'object') return null
+    if (typeof item.message === 'string') return item.message
+    const original = item.original
+    if (typeof original === 'string') return original
+    if (original && typeof original === 'object' && !Array.isArray(original)) {
+      const entries = Object.entries(original)
+      if (entries.length && entries.every(([key, value], index) => key === String(index) && typeof value === 'string')) {
+        return entries.map(([, value]) => value).join('')
+      }
+    }
+    return null
+  }
+  const saveErrorContent = (() => {
+    const result = formState?.result?.result
+    if (Array.isArray(result)) return result.map(saveErrorText).filter(Boolean).join(', ') || t('ERROR', 'Error')
+    return saveErrorText(result) || t('ERROR', 'Error')
+  })()
+
+  return (
+    <>
+      <InputWrapper>
+        <Input
+          type='email'
+          name='email'
+          aria-label='email'
+          aria-invalid={!!validationError}
+          placeholder={t('EMAIL', 'Email')}
+          autoComplete='email'
+          required
+          value={email}
+          disabled={loading}
+          onChange={event => {
+            setEmail(event.target.value)
+            setValidationError(null)
+          }}
+          onKeyDown={event => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              handleSaveEmail()
+            }
+          }}
+        />
+        <InputBeforeIcon>
+          <Icon name="envelope" />
+        </InputBeforeIcon>
+      </InputWrapper>
+      <Button
+        data-doc-control='verification-save-email'
+        type='button'
+        color='primary'
+        disabled={loading}
+        onClick={handleSaveEmail}
+      >
+        {t('SAVE', 'Save')}
+      </Button>
+      {user?.email && onCancel && (
+        <Button
+          data-doc-control='verification-cancel-email'
+          type='button'
+          color='secundary'
+          disabled={loading}
+          onClick={onCancel}
+        >
+          {t('CANCEL', 'Cancel')}
+        </Button>
+      )}
+      {validationError && (
+        <WarningText role='alert'>
+          {validationError}
+        </WarningText>
+      )}
+      {saveError && (
+        <WarningText role='alert'>
+          {saveErrorContent}
+        </WarningText>
+      )}
+      {saveError && user?.guest_id && (
+        <LogoutActionController
+          useDefualtSessionManager
+          UIComponent={VerificationEmailRecovery}
+          disabled={loading}
+          onExiting={setExiting}
+        />
+      )}
+    </>
+  )
+}
+
 const UserVerificationUI = (props) => {
   const {
     verifyEmailState,
@@ -63,6 +211,7 @@ const UserVerificationUI = (props) => {
   const [phoneState, setPhoneState] = useState(null)
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState(2)
+  const [editingEmail, setEditingEmail] = useState(false)
 
   const isEmailVerifyRequired = auth && configs?.verification_email_required?.value === '1' && !user?.email_verified
   const isPhoneVerifyRequired = auth && configs?.verification_phone_required?.value === '1' && !user?.phone_verified
@@ -80,6 +229,7 @@ const UserVerificationUI = (props) => {
   const numOtpInputs = isEmailVerifyRequired ? 6 : 4
 
   const handleSendOtp = (opt, channel) => {
+    if (opt !== 'phone' && (!user?.email || editingEmail || verifyEmailState?.loadingSendCode || verifyEmailState?.loadingCheckCode)) return
     resetOtpLeftTime()
     if (opt === 'phone') {
       const ch = channel || 2
@@ -176,7 +326,7 @@ const UserVerificationUI = (props) => {
 
   return (
     <Container>
-      <FormInput>
+      <FormInput onSubmit={event => event.preventDefault()}>
         <WrapperText>
           <span>
             {t('VERIFICATION_CODE', 'Verification Code')}
@@ -209,6 +359,19 @@ const UserVerificationUI = (props) => {
         {isEmailVerifyRequired && (
           !verificationState.email
             ? (
+                user?.guest_id && (!user?.email || editingEmail)
+                  ? (
+                <UserFormController
+                  key={user?.id}
+                  user={user}
+                  useDefualtSessionManager
+                  UIComponent={VerificationEmailForm}
+                  verifyEmailState={verifyEmailState}
+                  handleSuccessUpdate={() => setEditingEmail(false)}
+                  onCancel={() => setEditingEmail(false)}
+                />
+                    )
+                  : (
             <>
               <InputWrapper>
                 <Input
@@ -223,15 +386,32 @@ const UserVerificationUI = (props) => {
                   <Icon name="envelope" />
                 </InputBeforeIcon>
               </InputWrapper>
+              {!user?.email && (
+                <WarningText role='status'>
+                  {t('VERIFICATION_EMAIL_MISSING', 'This account has no email address. An email address is required to send a verification code.')}
+                </WarningText>
+              )}
               <Button
                 type='button'
                 color='primary'
-                disabled={verifyEmailState?.loadingSendCode || verifyEmailState?.loadingCheckCode}
+                disabled={!user?.email || verifyEmailState?.loadingSendCode || verifyEmailState?.loadingCheckCode}
                 onClick={handleSendOtp}
               >
                 {t('SEND_CODE', 'Send code')}
               </Button>
+              {user?.guest_id && (
+              <Button
+                data-doc-control='verification-edit-email'
+                type='button'
+                color='secundary'
+                disabled={verifyEmailState?.loadingSendCode || verifyEmailState?.loadingCheckCode}
+                onClick={() => setEditingEmail(true)}
+              >
+                {t('CHANGE', 'Change')}
+              </Button>
+              )}
             </>
+                    )
               )
             : (
             <>
@@ -428,11 +608,15 @@ const UserVerificationUI = (props) => {
 }
 
 export const UserVerification = (props) => {
+  const [{ user }] = useSession()
   const verifyProps = {
     ...props,
     UIComponent: UserVerificationUI
   }
   return (
-    <UserVerificationController {...verifyProps} />
+    <UserVerificationController
+      key={JSON.stringify([user?.id, user?.email])}
+      {...verifyProps}
+    />
   )
 }
