@@ -25,6 +25,15 @@ export const formatSearchQueryLocation = (location) => {
 
 export const hasValidSearchLocation = (location) => !!formatSearchQueryLocation(location)
 
+const FALLBACK_DEFAULT_LOCATION = { lat: 40.7744146, lng: -73.9678064 }
+
+export const getConfigDefaultLocation = (configs) => {
+  const lat = Number(configs?.location_default_latitude?.value)
+  const lng = Number(configs?.location_default_longitude?.value)
+  if (isNaN(lat) || isNaN(lng)) return { ...FALLBACK_DEFAULT_LOCATION }
+  return { lat, lng }
+}
+
 export const appendLocationToSearch = (existingSearch, location) => {
   const formatted = formatSearchQueryLocation(location)
   if (!formatted) return existingSearch || ''

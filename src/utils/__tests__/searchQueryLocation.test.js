@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendLocationToSearch,
   formatSearchQueryLocation,
+  getConfigDefaultLocation,
   hasValidSearchLocation,
   parseSearchQueryLocation,
   resolveSearchQuery,
@@ -43,5 +44,22 @@ describe('searchQueryLocation', () => {
   it('stripLocationSearchParams removes geo and order_type params', () => {
     expect(stripLocationSearchParams('?lat=1&lng=2&order_type=1&keep=yes')).toBe('?keep=yes')
     expect(stripLocationSearchParams('')).toBe('')
+  })
+
+  it('getConfigDefaultLocation reads the default location configs', () => {
+    const configs = {
+      location_default_latitude: { value: '20.6686' },
+      location_default_longitude: { value: '-103.3688' }
+    }
+    expect(getConfigDefaultLocation(configs)).toEqual({ lat: 20.6686, lng: -103.3688 })
+  })
+
+  it('getConfigDefaultLocation falls back when a config is missing or malformed', () => {
+    const fallback = { lat: 40.7744146, lng: -73.9678064 }
+    expect(getConfigDefaultLocation(undefined)).toEqual(fallback)
+    expect(getConfigDefaultLocation({
+      location_default_latitude: { value: '49.2189273' },
+      location_default_longitude: { value: '-123.0837344,14' }
+    })).toEqual(fallback)
   })
 })

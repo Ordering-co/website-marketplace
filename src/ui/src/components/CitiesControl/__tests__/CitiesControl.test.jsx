@@ -14,8 +14,23 @@ describe('CitiesControl', () => {
         handleChangeCity={vi.fn()}
       />
     )
-    expect(getByText('Select a store')).toBeInTheDocument()
+    expect(getByText('Select a city')).toBeInTheDocument()
     expect(getByText('Austin')).toBeInTheDocument()
+  })
+
+  it('clears the city filter with the all cities option', () => {
+    const handleChangeCity = vi.fn()
+    const { getByText } = renderWithProviders(
+      <CitiesControl
+        cities={[{ id: 1, name: 'Austin', enabled: true }]}
+        onClose={vi.fn()}
+        handleChangeCity={handleChangeCity}
+      />
+    )
+    fireEvent.click(getByText('Austin'))
+    fireEvent.click(getByText('All cities'))
+    fireEvent.click(getByText('Continue'))
+    expect(handleChangeCity).toHaveBeenCalledWith(null)
   })
 
   it('calls onClose when continue is clicked', () => {

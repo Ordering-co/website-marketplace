@@ -22,6 +22,7 @@ export const CitiesControl = (props) => {
 
   const [cityState, setCityState] = useState(orderState?.options?.city_id)
   const [cityFilter, setCityFilter] = useState('')
+  const isAllCitiesSelected = cityState === null || cityState === undefined
   const handleClick = () => {
     cityState !== orderState?.options?.city_id && handleChangeCity(cityState)
     onClose && onClose()
@@ -39,7 +40,7 @@ export const CitiesControl = (props) => {
         </ModalIconWrapper>
         <ModalHeader>
           <ModalTitle>
-            {t('SELECT_A_STORE', 'Select a store')}
+            {t('SELECT_A_CITY', 'Select a city')}
           </ModalTitle>
         </ModalHeader>
         {
@@ -57,6 +58,14 @@ export const CitiesControl = (props) => {
                   search={cityFilter}
                 />
               </SearchBarContainer>
+              <CityItem data-doc-control='cities-control-all' onClick={() => setCityState(null)}>
+                <span className='radio'>
+                  {isAllCitiesSelected
+                    ? <Icon name="radioChecked" className='city-checked' />
+                    : <Icon name="radioOff" />}
+                </span>
+                {t('ALL_CITIES', 'All cities')}
+              </CityItem>
               {cities?.filter(city => city?.name?.toLowerCase?.()?.includes(cityFilter?.toLowerCase?.()))?.map(city => city?.enabled && (
                 <CityItem key={city?.id} onClick={() => setCityState(city?.id === cityState ? null : city?.id)}>
                   <span className='radio'>

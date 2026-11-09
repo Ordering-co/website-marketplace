@@ -19,6 +19,7 @@ import { useLanguage } from '~components/contexts/LanguageContext'
 import { useOrder } from '~components/contexts/OrderContext'
 import { useConfig } from '~components/contexts/ConfigContext'
 import { isWalletEnabled as isWalletConfigEnabled } from '~components/utils/configHelpers'
+import { parseUnaddressedOrderTypes } from '~components/utils/orderTypeAddress'
 import { useEvent } from '~components/contexts/EventContext'
 import { useOrderingTheme } from '~components/contexts/OrderingThemeContext'
 import { useSite } from '~components/contexts/SiteContext'
@@ -281,6 +282,7 @@ export const App = () => {
       : { page: 'search' }
     : null
   const configTypes = configs?.order_types_allowed?.value?.split('|').map(value => Number(value)) || []
+  const isUnaddressedOrderType = parseUnaddressedOrderTypes(configs?.unaddressed_order_types_allowed?.value).includes(orderStatus?.options?.type)
 
   const isWalletEnabled = configs?.cash_wallet?.value && isWalletConfigEnabled(configs) && !isKioskApp
   const isEmailVerifyRequired = auth && configs?.verification_email_required?.value === '1' && !user?.email_verified
@@ -964,7 +966,7 @@ export const App = () => {
                                           <Redirect to='/verify' />
                                               )
                                             : (
-                                                (orderStatus.options?.address?.location || isFranchiseOne || hasSearchQueryLocation) && !singleBusinessConfig.isActive
+                                                (orderStatus.options?.address?.location || isUnaddressedOrderType || isFranchiseOne || hasSearchQueryLocation) && !singleBusinessConfig.isActive
                                                   ? <BusinessesList searchValueCustom={searchValue} />
                                                   : <Redirect to={singleBusinessConfig.isActive ? `/${singleBusinessConfig.businessSlug}` : '/'} />
                                               )

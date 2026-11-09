@@ -3,7 +3,7 @@ import { useTheme } from 'styled-components'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { Filters, FiltersInner, FilterItem } from '../../../BusinessListingSearch/styles'
-import { resolveSearchQuery } from '../../../../../../utils/searchQueryLocation'
+import { resolveSearchQuery, getConfigDefaultLocation } from '../../../../../../utils/searchQueryLocation'
 
 import {
   BusinessContainer,
@@ -26,7 +26,8 @@ import {
   FiltersContainer,
   FiltersSearch,
   SearchRedirectArea,
-  EmptyStateWrapper
+  EmptyStateWrapper,
+  CitiesButtonWrapper
 } from './styles'
 
 import { useOrder } from '~components/contexts/OrderContext'
@@ -34,6 +35,7 @@ import { useSession } from '~components/contexts/SessionContext'
 import { useLanguage } from '~components/contexts/LanguageContext'
 import { useConfig } from '~components/contexts/ConfigContext'
 import { BusinessList as BusinessListController } from '~components/components/BusinessList'
+import { parseUnaddressedOrderTypes } from '~components/utils/orderTypeAddress'
 
 import { OrdersSection } from './OrdersSection'
 
@@ -174,7 +176,24 @@ const BusinessesListingUI = (props) => {
   const [showCustomOrder, setShowCustomOrder] = useState(false)
   const customOrderEnabled = auth && configs?.custom_order_enabled?.value === '1'
   const hasAddress = Boolean(orderState?.options?.address?.address)
-  const hideCities = true
+  const unaddressedTypes = parseUnaddressedOrderTypes(configs?.unaddressed_order_types_allowed?.value)
+  const isUnaddressedListing = !hasAddress && unaddressedTypes.includes(orderState?.options?.type)
+  const allCitiesDisabled = citiesState?.cities?.every(city => !city?.enabled)
+  const hideCities = theme?.business_listing_view?.components?.cities?.hidden ||
+    orderState?.options?.type !== 2 ||
+    !isUnaddressedListing ||
+    allCitiesDisabled
+  const selectedCityLabel = citiesState?.cities?.find(city => city?.id === orderState?.options?.city_id)?.name || t('SELECT_A_CITY', 'Select a city')
+  const emptyStateContent = hasAddress
+    ? t('NO_BUSINESSES_AVAILABLE', 'No businesses available at this address')
+    : isUnaddressedListing
+      ? t('NO_BUSINESSES_AVAILABLE_WITHOUT_ADDRESS', 'No businesses available right now')
+      : t('ADD_ADDRESS_TO_SEE_BUSINESSES', 'Add your address to see businesses near you')
+  const emptyStateSubtitle = hasAddress
+    ? t('NO_BUSINESSES_AVAILABLE_DESC', 'Try changing your address or filters.')
+    : isUnaddressedListing
+      ? t('NO_BUSINESSES_AVAILABLE_WITHOUT_ADDRESS_DESC', 'Try another city or add your address to see businesses near you.')
+      : t('ADD_ADDRESS_TO_SEE_BUSINESSES_DESC', "We'll show you the places that deliver to you.")
   const hideSearch = theme?.business_listing_view?.components?.search?.hidden
   const hideFilter = theme?.business_listing_view?.components?.filter?.hidden || hideSearch
   const hidePreviousOrders = theme?.business_listing_view?.components?.previous_orders_block?.hidden
@@ -278,9 +297,10 @@ const BusinessesListingUI = (props) => {
 
   const redirectToBusinessSearch = (search = '') => {
     const orderLocation = orderState?.options?.address?.location
+    const fallbackLocation = customLocation || (isUnaddressedListing ? getConfigDefaultLocation(configs) : null)
     onRedirectPage({
       page: 'business_search',
-      search: resolveSearchQuery(search, orderLocation, customLocation)
+      search: resolveSearchQuery(search, orderLocation, fallbackLocation)
     })
   }
 
@@ -323,6 +343,11 @@ const BusinessesListingUI = (props) => {
     const selectedCity = citiesState?.cities?.find(city => city?.id === orderState?.options?.city_id)
     if (!selectedCity || !selectedCity?.enabled) changeCityFilter(null)
   }, [citiesState, orderState?.options?.city_id])
+
+  useEffect(() => {
+    if (orderState?.loading || !hasAddress || !orderState?.options?.city_id) return
+    changeCityFilter(null)
+  }, [orderState?.loading, hasAddress, orderState?.options?.city_id])
 
   useEffect(() => {
     if (pickupTypes.includes(orderState?.options?.type) && isCustomerMode) {
@@ -426,9 +451,11 @@ const BusinessesListingUI = (props) => {
               </SearchRedirectArea>
             )}
             {!hideCities && citiesState?.cities?.length > 0 && (
-              <Button color='primary' onClick={handleOpenCities}>
-                {citiesState?.cities?.find(city => city?.id === orderState?.options?.city_id)?.name || t('SELECT_A_CITY', 'Select a city')}
-              </Button>
+              <CitiesButtonWrapper>
+                <Button color='primary' onClick={handleOpenCities}>
+                  {selectedCityLabel}
+                </Button>
+              </CitiesButtonWrapper>
             )}
             {isCustomLayout && (
               <Icon name="map" onClick={toggleMap} />
@@ -541,6 +568,7 @@ const BusinessesListingUI = (props) => {
             favoriteIds={favoriteIds}
             setFavoriteIds={setFavoriteIds}
             disabledCities
+            hideDistance={isUnaddressedListing}
             businessUrlTemplate={businessUrlTemplate}
           />
         </HightestRatedWrapper>
@@ -559,6 +587,7 @@ const BusinessesListingUI = (props) => {
             favoriteIds={favoriteIds}
             setFavoriteIds={setFavoriteIds}
             disabledCities
+            hideDistance={isUnaddressedListing}
             businessUrlTemplate={businessUrlTemplate}
           />
         </HightestRatedWrapper>
@@ -585,9 +614,11 @@ const BusinessesListingUI = (props) => {
               <Icon name="map" onClick={toggleMap} />
             )}
             {!hideCities && citiesState?.cities?.length > 0 && (
-              <Button color='primary' onClick={handleOpenCities}>
-                {citiesState?.cities?.find(city => city?.id === orderState?.options?.city_id)?.name || t('SELECT_A_CITY', 'Select a city')}
-              </Button>
+              <CitiesButtonWrapper>
+                <Button color='primary' onClick={handleOpenCities}>
+                  {selectedCityLabel}
+                </Button>
+              </CitiesButtonWrapper>
             )}
           </WrapperSearch>
         </SearchContainer>
@@ -614,12 +645,8 @@ const BusinessesListingUI = (props) => {
               <EmptyStateWrapper data-resume-recover='businesses'>
                 <NotFoundSource
                   variant='empty'
-                  content={hasAddress
-                    ? t('NO_BUSINESSES_AVAILABLE', 'No businesses available at this address')
-                    : t('ADD_ADDRESS_TO_SEE_BUSINESSES', 'Add your address to see businesses near you')}
-                  subtitle={hasAddress
-                    ? t('NO_BUSINESSES_AVAILABLE_DESC', 'Try changing your address or filters.')
-                    : t('ADD_ADDRESS_TO_SEE_BUSINESSES_DESC', "We'll show you the places that deliver to you.")}
+                  content={emptyStateContent}
+                  subtitle={emptyStateSubtitle}
                 >
                   <Button
                     outline
@@ -656,6 +683,7 @@ const BusinessesListingUI = (props) => {
                 businessDeliveryTime={business?.delivery_time}
                 businessPickupTime={business?.pickup_time}
                 businessDistance={business?.distance}
+                hideDistance={isUnaddressedListing}
                 handleUpdateBusinessList={handleUpdateBusinessList}
                 favoriteIds={favoriteIds}
                 businessUrlTemplate={businessUrlTemplate}

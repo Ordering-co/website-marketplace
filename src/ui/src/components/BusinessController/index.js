@@ -81,7 +81,8 @@ const BusinessControllerUI = (props) => {
     isShowMap,
     fromFavoriteList,
     fromMyOrders,
-    hideProductList
+    hideProductList,
+    hideDistance
   } = props
 
   const [configState] = useConfig()
@@ -102,7 +103,7 @@ const BusinessControllerUI = (props) => {
   const hideBusinessLogo = !fromBusinessListing
   const hideBusinessFee = theme?.business_listing_view?.components?.business?.components?.fee?.hidden
   const hideBusinessTime = theme?.business_listing_view?.components?.business?.components?.time?.hidden
-  const hideBusinessDistance = theme?.business_listing_view?.components?.business?.components?.distance?.hidden
+  const hideBusinessDistance = hideDistance || theme?.business_listing_view?.components?.business?.components?.distance?.hidden
   const hideBusinessReviews = theme?.business_listing_view?.components?.business?.components?.reviews?.hidden
   const hideBusinessFavorite = !isShowMap && !fromFavoriteList
   const hideBusinessOffer = theme?.business_listing_view?.components?.business?.components?.offer?.hidden

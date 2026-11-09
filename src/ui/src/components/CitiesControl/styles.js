@@ -38,4 +38,8 @@ export const ButtonWrapper = styled.div`
 
 export const SearchBarContainer = styled.div`
   margin-bottom: 10px;
+
+  && input {
+    width: 100%;
+  }
 `

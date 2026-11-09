@@ -7,9 +7,11 @@ import { ServerStyleSheet } from 'styled-components'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 vi.mock('react-loading-skeleton/dist/skeleton.css', () => ({}))
-vi.mock('../../../../../../../utils/searchQueryLocation', () => ({
-  resolveSearchQuery: (search) => search || ''
+const searchQueryMocks = vi.hoisted(() => ({
+  resolveSearchQuery: vi.fn((search) => search || ''),
+  getConfigDefaultLocation: vi.fn(() => ({ lat: 20.6, lng: -103.3 }))
 }))
+vi.mock('../../../../../../../utils/searchQueryLocation', () => searchQueryMocks)
 vi.mock('~ui/utils', () => ({
   getCateringValues: () => ({}),
   checkSiteUrl: (_u, f) => f,
@@ -121,14 +123,16 @@ vi.mock('~ui/hooks/useWindowSize', () => ({
 vi.mock('~components/contexts/SessionContext', () => ({
   useSession: () => [{ auth: true, user: { id: 1 }, loading: false }, { login: vi.fn() }]
 }))
+const baseConfigs = {
+  filter_search_options: { value: 'price_range|brands|max_delivery_fee|max_delivery_time|max_distance|business_categories' },
+  order_types_allowed: { value: '1|2' },
+  advanced_business_search_enabled: { value: '1' },
+  custom_order_enabled: { value: '1' }
+}
+const configFixture = vi.hoisted(() => ({ current: null }))
 vi.mock('~components/contexts/ConfigContext', () => ({
   useConfig: () => [{
-    configs: {
-      filter_search_options: { value: 'price_range|brands|max_delivery_fee|max_delivery_time|max_distance|business_categories' },
-      order_types_allowed: { value: '1|2' },
-      advanced_business_search_enabled: { value: '1' },
-      custom_order_enabled: { value: '1' }
-    },
+    configs: configFixture.current,
     loading: false
   }]
 }))
@@ -159,12 +163,15 @@ vi.mock('~components/components/BusinessList', () => ({
   )
 }))
 
+const baseOrderOptions = { type: 1, address: { address: '1 Main St', location: { lat: 1, lng: 2 } } }
+const orderFixture = vi.hoisted(() => ({ options: null }))
+const changeCityFilter = vi.hoisted(() => vi.fn())
 vi.mock('~components/contexts/OrderContext', () => ({
   useOrder: () => [{
-    options: { type: 1, address: { address: '1 Main St', location: { lat: 1, lng: 2 } } },
+    options: orderFixture.options,
     carts: {},
     loading: false
-  }, { changeType, refreshOrderOptions: vi.fn() }]
+  }, { changeType, changeCityFilter, refreshOrderOptions: vi.fn() }]
 }))
 
 const listingTheme = {
@@ -207,6 +214,11 @@ describe('OriginalBusinessesListing', () => {
 
   beforeEach(() => {
     changeType.mockClear()
+    changeCityFilter.mockClear()
+    searchQueryMocks.resolveSearchQuery.mockClear()
+    configFixture.current = { ...baseConfigs }
+    orderFixture.options = { ...baseOrderOptions }
+    listingFixture.current.citiesState = { cities: [{ id: 9, name: 'Austin', enabled: true }] }
     listingFixture.current.onRedirectPage.mockClear()
     listingFixture.current.getBusinesses.mockClear()
     window.localStorage.setItem('user-customer', JSON.stringify({ id: 99 }))
@@ -275,6 +287,102 @@ describe('OriginalBusinessesListing', () => {
     expect(getByTestId('empty')).toBeInTheDocument()
     fireEvent.click(getByText('Change address'))
     expect(getByTestId('modal')).toBeInTheDocument()
+  })
+
+  it('shows the city selector for pickup without an address', () => {
+    configFixture.current = { ...baseConfigs, unaddressed_order_types_allowed: { value: '2' } }
+    orderFixture.options = { type: 2, address: {} }
+    const { getByText, getByTestId } = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    fireEvent.click(getByText('Select a city'))
+    expect(getByTestId('cities-control')).toBeInTheDocument()
+    expect(listingFixture.current.getCities).not.toHaveBeenCalled()
+  })
+
+  it('hides the city selector when the order has an address', () => {
+    configFixture.current = { ...baseConfigs, unaddressed_order_types_allowed: { value: '2' } }
+    orderFixture.options = { ...baseOrderOptions, type: 2 }
+    const { queryByText } = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    expect(queryByText('Select a city')).not.toBeInTheDocument()
+  })
+
+  it('clears a saved city once the order has an address', () => {
+    orderFixture.options = { ...baseOrderOptions, type: 2, city_id: 9 }
+    renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    expect(changeCityFilter).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps the saved city while there is no address', () => {
+    configFixture.current = { ...baseConfigs, unaddressed_order_types_allowed: { value: '2' } }
+    orderFixture.options = { type: 2, address: {}, city_id: 9 }
+    renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    expect(changeCityFilter).not.toHaveBeenCalled()
+  })
+
+  it('hides the city selector outside pickup', () => {
+    const { queryByText } = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    expect(queryByText('Select a city')).not.toBeInTheDocument()
+  })
+
+  it('hides the city selector when the theme hides it or every city is disabled', () => {
+    configFixture.current = { ...baseConfigs, unaddressed_order_types_allowed: { value: '2' } }
+    orderFixture.options = { type: 2, address: {} }
+    const hiddenCitiesTheme = {
+      ...listingTheme,
+      business_listing_view: {
+        components: { ...listingTheme.business_listing_view.components, cities: { hidden: true } }
+      }
+    }
+    const { queryByText, unmount } = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: hiddenCitiesTheme }
+    )
+    expect(queryByText('Select a city')).not.toBeInTheDocument()
+    unmount()
+
+    listingFixture.current.citiesState = { cities: [{ id: 9, name: 'Austin', enabled: false }] }
+    const disabledRender = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    expect(disabledRender.queryByText('Select a city')).not.toBeInTheDocument()
+  })
+
+  it('shows the no-address empty state for pickup allowed without an address', () => {
+    configFixture.current = { ...baseConfigs, unaddressed_order_types_allowed: { value: '3|2' } }
+    orderFixture.options = { type: 2, address: {} }
+    listingFixture.current.businessesList = { loading: false, error: null, businesses: [], fetched: true }
+    const { getByTestId, queryByText } = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={vi.fn()} />,
+      { theme: listingTheme }
+    )
+    expect(getByTestId('empty')).toHaveTextContent('No businesses available right now')
+    expect(queryByText('Add your address to see businesses near you')).not.toBeInTheDocument()
+  })
+
+  it('sends the default location to advanced search for pickup without an address', () => {
+    configFixture.current = { ...baseConfigs, unaddressed_order_types_allowed: { value: '2' } }
+    orderFixture.options = { type: 2, address: {} }
+    const { getByTestId } = renderWithProviders(
+      <OriginalBusinessesListing onRedirectPage={listingFixture.current.onRedirectPage} />,
+      { theme: listingTheme }
+    )
+    fireEvent.click(getByTestId('search-enter'))
+    expect(searchQueryMocks.resolveSearchQuery).toHaveBeenCalledWith('', undefined, { lat: 20.6, lng: -103.3 })
   })
 
   it('redirects to advanced business search via enter and visual filters', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders, defaultTheme } from '../../../../../__tests__/helpers/testUtils'
 import { HomeHero } from '../index'
 
@@ -17,8 +17,20 @@ const orderState = vi.hoisted(() => ({
   current: { options: { address: {} }, loading: false, carts: {} }
 }))
 
+const orderActions = vi.hoisted(() => ({
+  changeType: vi.fn(() => Promise.resolve())
+}))
+
 vi.mock('~components/contexts/OrderContext', () => ({
-  useOrder: () => [orderState.current, { refreshOrderOptions: vi.fn() }]
+  useOrder: () => [orderState.current, { refreshOrderOptions: vi.fn(), changeType: orderActions.changeType }]
+}))
+
+const configState = vi.hoisted(() => ({
+  current: {}
+}))
+
+vi.mock('~components/contexts/ConfigContext', () => ({
+  useConfig: () => [{ configs: configState.current }]
 }))
 
 vi.mock('~ui/hooks/useWindowSize', () => ({
@@ -62,6 +74,92 @@ describe('HomeHero', () => {
     sessionState.auth = false
     sessionState.loading = false
     orderState.current = { options: { address: {} }, loading: false, carts: {} }
+    orderActions.changeType.mockClear()
+    configState.current = {}
+  })
+
+  it('goes straight to pickup businesses when pickup works without an address', async () => {
+    configState.current = {
+      order_types_allowed: { value: '1|2' },
+      unaddressed_order_types_allowed: { value: '3|2' }
+    }
+    orderState.current = { options: { type: 1, address: {} }, loading: false, carts: {} }
+    const onFindBusiness = vi.fn()
+    const { getByText, queryByTestId } = renderWithProviders(
+      <HomeHero onFindBusiness={onFindBusiness} />,
+      { theme: heroTheme }
+    )
+    fireEvent.click(getByText('Search'))
+    await waitFor(() => expect(onFindBusiness).toHaveBeenCalled())
+    expect(orderActions.changeType).toHaveBeenCalledWith(2)
+    expect(queryByTestId('modal')).not.toBeInTheDocument()
+  })
+
+  it('keeps the order type when it already works without an address', async () => {
+    configState.current = {
+      order_types_allowed: { value: '1|2|3' },
+      unaddressed_order_types_allowed: { value: '3|2' }
+    }
+    orderState.current = { options: { type: 3, address: {} }, loading: false, carts: {} }
+    const onFindBusiness = vi.fn()
+    const { getByText } = renderWithProviders(
+      <HomeHero onFindBusiness={onFindBusiness} />,
+      { theme: heroTheme }
+    )
+    fireEvent.click(getByText('Search'))
+    await waitFor(() => expect(onFindBusiness).toHaveBeenCalled())
+    expect(orderActions.changeType).not.toHaveBeenCalled()
+  })
+
+  it('asks for the address when pickup still requires one', () => {
+    configState.current = {
+      order_types_allowed: { value: '1|2' },
+      unaddressed_order_types_allowed: { value: '3' }
+    }
+    const onFindBusiness = vi.fn()
+    const { getByText, getByTestId } = renderWithProviders(
+      <HomeHero onFindBusiness={onFindBusiness} />,
+      { theme: heroTheme }
+    )
+    fireEvent.click(getByText('Search'))
+    expect(getByTestId('address-form')).toBeInTheDocument()
+    expect(orderActions.changeType).not.toHaveBeenCalled()
+    expect(onFindBusiness).not.toHaveBeenCalled()
+  })
+
+  it('keeps the address input opening the address form when pickup works without an address', () => {
+    configState.current = {
+      order_types_allowed: { value: '1|2' },
+      unaddressed_order_types_allowed: { value: '2' }
+    }
+    const onFindBusiness = vi.fn()
+    const { getByText, getByTestId } = renderWithProviders(
+      <HomeHero onFindBusiness={onFindBusiness} />,
+      { theme: heroTheme }
+    )
+    fireEvent.click(getByText('Enter where you want your order delivered.'))
+    expect(getByTestId('address-form')).toBeInTheDocument()
+    expect(onFindBusiness).not.toHaveBeenCalled()
+  })
+
+  it('uses the saved address instead of switching to pickup', () => {
+    configState.current = {
+      order_types_allowed: { value: '1|2' },
+      unaddressed_order_types_allowed: { value: '2' }
+    }
+    orderState.current = {
+      options: { type: 1, address: { address: '1 Main', location: { lat: 1, lng: 2 } } },
+      loading: false,
+      carts: {}
+    }
+    const onFindBusiness = vi.fn()
+    const { getByText } = renderWithProviders(
+      <HomeHero onFindBusiness={onFindBusiness} />,
+      { theme: heroTheme }
+    )
+    fireEvent.click(getByText('Search'))
+    expect(onFindBusiness).toHaveBeenCalled()
+    expect(orderActions.changeType).not.toHaveBeenCalled()
   })
 
   it('renders search CTA and opens address modal without location', () => {

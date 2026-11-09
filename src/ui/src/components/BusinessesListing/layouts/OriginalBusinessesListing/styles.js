@@ -126,6 +126,21 @@ export const WrapperSearch = styled.div`
   `}
 `
 
+export const CitiesButtonWrapper = styled.div`
+  order: -1;
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+
+  && button {
+    margin-left: 0;
+    height: 41.5px;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: normal;
+  }
+`
+
 export const ErrorMessage = styled.span`
   padding: 20px;
   width: 100%;

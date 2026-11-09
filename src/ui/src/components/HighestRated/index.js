@@ -33,7 +33,8 @@ const HighestRatedUI = (props) => {
     setFavoriteIds,
     businessUrlTemplate,
     title,
-    description
+    description,
+    hideDistance
   } = props
 
   const [, t] = useLanguage()
@@ -133,6 +134,7 @@ const HighestRatedUI = (props) => {
                       setFavoriteIds={setFavoriteIds}
                       onPreorderBusiness={setPreorderBusiness}
                       businessUrlTemplate={businessUrlTemplate}
+                      hideDistance={hideDistance}
                       m={index === businesslist?.length - 1 ? '10px 0px 10px 20px' : '10px 20px'}
                     />
                 ))

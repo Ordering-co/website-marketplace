@@ -657,6 +657,20 @@
     "bg": "Всички бизнеси",
     "tr": "Tüm işletmeler"
   },
+  "ALL_CITIES": {
+    "en": "All cities",
+    "es": "Todas las ciudades",
+    "fr": "Toutes les villes",
+    "it": "Tutte le città",
+    "de": "Alle Städte",
+    "pt": "Todas as cidades",
+    "da": "Alle byer",
+    "nl": "Alle steden",
+    "ar": "كل المدن",
+    "el": "Όλες οι πόλεις",
+    "bg": "Всички градове",
+    "tr": "Tüm şehirler"
+  },
   "AM": {
     "en": "AM",
     "es": "AM",
@@ -8987,6 +9001,34 @@
     "bg": "Опитайте да промените адреса или филтрите си.",
     "tr": "Adresinizi veya filtrelerinizi değiştirmeyi deneyin."
   },
+  "NO_BUSINESSES_AVAILABLE_WITHOUT_ADDRESS": {
+    "en": "No businesses available right now",
+    "es": "No hay negocios disponibles en este momento",
+    "fr": "Aucun commerce disponible pour le moment",
+    "it": "Nessuna attività disponibile al momento",
+    "de": "Derzeit sind keine Geschäfte verfügbar",
+    "pt": "Nenhum estabelecimento disponível no momento",
+    "da": "Ingen forretninger tilgængelige lige nu",
+    "nl": "Er zijn momenteel geen zaken beschikbaar",
+    "ar": "لا توجد متاجر متاحة حاليًا",
+    "el": "Δεν υπάρχουν διαθέσιμα καταστήματα αυτή τη στιγμή",
+    "bg": "В момента няма налични заведения",
+    "tr": "Şu anda uygun işletme yok"
+  },
+  "NO_BUSINESSES_AVAILABLE_WITHOUT_ADDRESS_DESC": {
+    "en": "Try another city or add your address to see businesses near you.",
+    "es": "Prueba con otra ciudad o agrega tu dirección para ver negocios cerca de ti.",
+    "fr": "Essayez une autre ville ou ajoutez votre adresse pour voir les commerces près de chez vous.",
+    "it": "Prova un'altra città o aggiungi il tuo indirizzo per vedere le attività vicino a te.",
+    "de": "Versuchen Sie eine andere Stadt oder fügen Sie Ihre Adresse hinzu, um Geschäfte in Ihrer Nähe zu sehen.",
+    "pt": "Tente outra cidade ou adicione seu endereço para ver estabelecimentos perto de você.",
+    "da": "Prøv en anden by, eller tilføj din adresse for at se forretninger i nærheden af dig.",
+    "nl": "Probeer een andere stad of voeg je adres toe om zaken bij jou in de buurt te zien.",
+    "ar": "جرّب مدينة أخرى أو أضف عنوانك لرؤية المتاجر القريبة منك.",
+    "el": "Δοκιμάστε άλλη πόλη ή προσθέστε τη διεύθυνσή σας για να δείτε καταστήματα κοντά σας.",
+    "bg": "Опитайте с друг град или добавете адреса си, за да видите заведения близо до вас.",
+    "tr": "Başka bir şehir deneyin veya yakınınızdaki işletmeleri görmek için adresinizi ekleyin."
+  },
   "NO_CARDS": {
     "en": "No cards",
     "es": "sin tarjetas",
@@ -15090,20 +15132,6 @@
     "el": "Επιλέξτε έναν τρόπο πληρωμής",
     "bg": "Изберете метод на плащане",
     "tr": "Bir ödeme yöntemi seçin"
-  },
-  "SELECT_A_STORE": {
-    "en": "Select a store",
-    "es": "Selecciona una tienda",
-    "fr": "Sélectionnez un magasin",
-    "it": "Seleziona un negozio",
-    "de": "Wählen Sie einen Shop aus",
-    "pt": "Selecione uma loja",
-    "da": "Vælg en butik",
-    "nl": "Selecteer een winkel",
-    "ar": "اختر متجرا",
-    "el": "Επιλέξτε ένα κατάστημα",
-    "bg": "Изберете магазин",
-    "tr": "Bir mağaza seçin"
   },
   "SELECT_ADDRESS_CUSTOMER": {
     "en": "Please select an address for the selected customer",

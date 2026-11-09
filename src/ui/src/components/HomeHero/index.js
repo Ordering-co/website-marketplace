@@ -13,6 +13,8 @@ import {
 import { useSession } from '~components/contexts/SessionContext'
 import { useOrder } from '~components/contexts/OrderContext'
 import { useLanguage } from '~components/contexts/LanguageContext'
+import { useConfig } from '~components/contexts/ConfigContext'
+import { parseUnaddressedOrderTypes } from '~components/utils/orderTypeAddress'
 
 import { Modal } from '~ui/src/components/Modal'
 import { Button } from '~ui/src/styles/Buttons'
@@ -30,12 +32,14 @@ import { Icon } from '~ui-icon'
 // post-login order-options refresh settle (a brief `loading` flicker resolves
 // the saved address) so the "Add address" modal doesn't flash. See .
 const ADDRESS_PROMPT_SETTLE_MS = 1500
+const PICKUP_ORDER_TYPE = 2
 
 export const HomeHero = (props) => {
   const { onFindBusiness, notificationState, urlLocation } = props
 
   const [{ auth, loading: sessionLoading }, { login }] = useSession()
-  const [orderState] = useOrder()
+  const [orderState, { changeType }] = useOrder()
+  const [{ configs }] = useConfig()
   const [, t] = useLanguage()
   const [modals, setModals] = useState({ listOpen: false, formOpen: false })
   const theme = useTheme()
@@ -53,10 +57,29 @@ export const HomeHero = (props) => {
     theme?.my_products?.components?.images?.components?.homepage_image_fullscreen ??
     theme?.layouts?.my_products?.components?.images?.components?.homepage_image_fullscreen ??
     false
+  const allowedOrderTypes = configs?.order_types_allowed?.value?.split('|').map(value => Number(value)) || []
+  const unaddressedTypes = parseUnaddressedOrderTypes(configs?.unaddressed_order_types_allowed?.value)
+  const canStartWithoutAddress = !orderState?.options?.address?.location &&
+    !urlLocation &&
+    allowedOrderTypes.includes(PICKUP_ORDER_TYPE) &&
+    unaddressedTypes.includes(PICKUP_ORDER_TYPE)
+
   const handleFindBusinesses = () => {
     if (!orderState?.options?.address?.location && !urlLocation) {
       setModals({ ...modals, formOpen: true })
       return
+    }
+    setModals({ listOpen: false, formOpen: false })
+    onFindBusiness && onFindBusiness()
+  }
+
+  const handleStartOrder = async () => {
+    if (!canStartWithoutAddress) {
+      handleFindBusinesses()
+      return
+    }
+    if (!unaddressedTypes.includes(orderState?.options?.type)) {
+      await changeType(PICKUP_ORDER_TYPE)
     }
     setModals({ listOpen: false, formOpen: false })
     onFindBusiness && onFindBusiness()
@@ -166,7 +189,8 @@ export const HomeHero = (props) => {
             <Button
               color='primary'
               name='find-business'
-              onClick={handleFindBusinesses}
+              disabled={canStartWithoutAddress && orderState?.loading}
+              onClick={handleStartOrder}
             >
               {t('HOME_HERO_SEARCH_BUTTON', theme?.defaultLanguages?.HOME_HERO_SEARCH_BUTTON || 'Search')}
             </Button>
